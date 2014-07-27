@@ -4,7 +4,9 @@ using System.IO;
 
 namespace iFix.Core
 {
-    public class Serialization
+    // Implements serialization of different value types into ArraySegment<byte> and
+    // serialization of IEnumerable<Field> into Stream.
+    public static class Serialization
     {
         // ChecksumTable[checksum] contains serialized value of the checksum.
         // For example, ChecksumTable[42] is "042".
@@ -20,6 +22,9 @@ namespace iFix.Core
         static readonly ArraySegment<byte> VersionTag = SerializeInt(8);
         static readonly ArraySegment<byte> BodyLengthTag = SerializeInt(9);
         static readonly ArraySegment<byte> CheckSumTag = SerializeInt(10);
+
+        // Static methods SerializeXXX() implement serialization of FIX value types.
+        // See http://www.onixs.biz/fix-dictionary/4.4/#DataTypes.
 
         public static ArraySegment<byte> SerializeString(string value)
         {
@@ -63,10 +68,10 @@ namespace iFix.Core
             return SerializeString(value.ToString("yyyyMMdd-HH:mm:ss.fff"));
         }
 
-        // Version should be something like "FIX.4.4".
+        // Version is the value of the BeginString<8> tag (e.g., "FIX.4.4").
         // The list of fields should NOT contain tags Version<8>, BodyLength<9> and CheckSum<10>. Those
         // are added automatically. Fields may be traversed more than once by the function and should have
-        // consistent values.
+        // consistent values. Does not flush the stream.
         public static void WriteMessage(Stream strm, ArraySegment<byte> version, IEnumerable<Field> fields)
         {
             int bodyLength = 0;

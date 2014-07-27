@@ -7,7 +7,8 @@ namespace iFix.Core
     // Trying to read a FIX message that is above the maximum supported size.
     public class MessageTooLargeException : Exception { }
 
-    // Trying to read a FIX message from an empty stream.
+    // Trying to read a FIX message from an empty stream. This exception is
+    // usually thrown when reading from a closed socket.
     public class EmptyStreamException : Exception { }
 
     // Low level class for chunking of byte streams into FIX messages.

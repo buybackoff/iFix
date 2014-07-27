@@ -2,6 +2,8 @@
 
 namespace iFix.Core
 {
+    // FIX field in its raw form: a key-value pair where both key and value are
+    // byte arrays.
     public struct Field
     {
         readonly ArraySegment<byte> _tag;

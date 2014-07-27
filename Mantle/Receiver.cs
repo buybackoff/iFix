@@ -6,12 +6,11 @@ using System.IO;
 namespace iFix.Mantle
 {
     // Message is missing BeginString<8> tag.
-    public class MissingBeginString : Exception {}
+    public class MissingBeginStringException : Exception {}
 
-    // TODO: use it.
-    public class UnsupportedProtocol : Exception
+    public class UnsupportedProtocolException : Exception
     {
-        public UnsupportedProtocol(string message) : base(message) { }
+        public UnsupportedProtocolException(string message) : base(message) { }
     }
 
     public class Receiver
@@ -49,13 +48,13 @@ namespace iFix.Mantle
         // Throws if the protocol can't be recognized.
         IMessageFactory GetFactory(IEnumerator<Field> fields)
         {
-            if (!fields.MoveNext()) throw new MissingBeginString();
+            if (!fields.MoveNext()) throw new MissingBeginStringException();
             int tag = Deserialization.ParseInt(fields.Current.Tag);
             BeginString version = new BeginString();
             if (version.AcceptField(tag, fields.Current.Value) != FieldAcceptance.Accepted)
-                throw new MissingBeginString();
+                throw new MissingBeginStringException();
             if (!_protocols.ContainsKey(version.Value))
-                throw new UnsupportedProtocol(String.Format("Unrecognized protocol: {0}", version.Value));
+                throw new UnsupportedProtocolException(String.Format("Unrecognized protocol: {0}", version.Value));
             return _protocols[version.Value];
         }
     }

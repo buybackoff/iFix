@@ -9,25 +9,26 @@ namespace iFix.Core
         public MalformedMessageException(string message) : base(message) { }
     }
 
-    public class Deserialization
+    // Implements parsing of fields and primitive FIX value types from ArraySegment<byte>.
+    public static class Deserialization
     {
         static readonly string TimestampFormatWithMillis = "yyyyMMdd-HH:mm:ss.fff";
         static readonly string TimestampFormatWithoutMillis = "yyyyMMdd-HH:mm:ss";
         static readonly string[] TimestampFormats = { TimestampFormatWithMillis, TimestampFormatWithoutMillis };
 
-        // Parses a string field.
+        // Static methods ParseXXX() implement deserialization of FIX value types.
+        // See http://www.onixs.biz/fix-dictionary/4.4/#DataTypes.
+
         public static string ParseString(ArraySegment<byte> bytes)
         {
             return bytes.AsAscii();
         }
 
-        // Parses an int field.
         public static int ParseInt(ArraySegment<byte> bytes)
         {
             return (int)ParseLong(bytes);
         }
 
-        // Parses a long field.
         public static long ParseLong(ArraySegment<byte> bytes)
         {
             // Parsing integers is a very common operation, so we want it to be fast.
@@ -82,6 +83,9 @@ namespace iFix.Core
                                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
         }
 
+        // Parses a field from bytes starting from position 'start' and ending at 'end'.
+        // Advances 'start' to the start of the next field. Throws if there is no field between
+        // start and end.
         public static Field ParseField(byte[] bytes, ref int start, int end)
         {
             int fieldMiddle = Find(Delimiters.TagValueSeparator, bytes, start, end);
@@ -93,16 +97,20 @@ namespace iFix.Core
             return res;
         }
 
+        // Finds the specified byte in the byte array and returns its index.
+        // Throws if the byte can't be found.
         static int Find(byte needle, byte[] haysack, int offset, int end)
         {
             for (int i = offset; i != end; ++i)
                 if (haysack[i] == needle)
                     return i;
-            throw new MalformedMessageException(
-                String.Format("Expected {0} in {1}", (char)needle, new ArraySegment<byte>(haysack, offset, end - offset)));
+            throw new MalformedMessageException(String.Format(
+                "Expected {0} in {1}", (char)needle,
+                new ArraySegment<byte>(haysack, offset, end - offset).AsAscii()));
         }
     }
 
+    // Stateful class for finding FIX message delimiters in a stream of bytes.
     class MessageTrailerMatcher
     {
         // SOH followed by "10=". Note that all characters are different, which makes it

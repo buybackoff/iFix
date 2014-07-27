@@ -1,14 +1,16 @@
 ﻿using System.Collections.Generic;
 
+// This file defines a subset of fields, groups and component blocks supported by FIX 4.4.
+
 namespace iFix.Mantle.Fix44
 {
-    // Protocol signature.
-    public class Protocol
+    // Protocol version string.
+    public static class Protocol
     {
         public static readonly string Value = "FIX.4.4";
     }
 
-    // Individual fields.
+    // Fields: http://www.onixs.biz/fix-dictionary/4.4/fields_by_tag.html.
 
     public class MsgType : StringField
     {
@@ -130,7 +132,57 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 44; } }
     }
 
-    // Blocks.
+    public class OrderID : StringField
+    {
+        protected override int Tag { get { return 37; } }
+    }
+
+    public class OrigClOrdID : StringField
+    {
+        protected override int Tag { get { return 41; } }
+    }
+
+    public class ExecType : CharField
+    {
+        protected override int Tag { get { return 150; } }
+    }
+
+    public class OrdStatus : CharField
+    {
+        protected override int Tag { get { return 39; } }
+    }
+
+    public class OrdRejReason : IntField
+    {
+        protected override int Tag { get { return 103; } }
+    }
+
+    public class LastQty : DecimalField
+    {
+        protected override int Tag { get { return 32; } }
+    }
+
+    public class LastPx : DecimalField
+    {
+        protected override int Tag { get { return 31; } }
+    }
+
+    public class LeavesQty : DecimalField
+    {
+        protected override int Tag { get { return 151; } }
+    }
+
+    public class OrigOrderID : StringField
+    {
+        protected override int Tag { get { return 9945; } }
+    }
+
+    public class MDEntryID : StringField
+    {
+        protected override int Tag { get { return 278; } }
+    }
+
+    // Component blocks: http://www.onixs.biz/fix-dictionary/4.4/#ComponentBlocks.
 
     // BeginString, BodyLength and MsgType are intentionally missing.
     // They are special enough to be handled separately together with
@@ -171,7 +223,7 @@ namespace iFix.Mantle.Fix44
         }
     }
 
-    // Groups.
+    // Groups: http://fixwiki.org/fixwiki/FPL:Tag_Value_Syntax#Repeating_Groups.
 
     public class TradingSessionIDGroup : FieldGroup<TradingSessionID>
     {

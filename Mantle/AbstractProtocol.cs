@@ -3,6 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 
+// This file defines FIX fields and messages in a version-agnostic way.
+// These abstractions apply to all versions of FIX.
+
 namespace iFix.Mantle
 {
     public enum FieldAcceptance
@@ -16,25 +19,41 @@ namespace iFix.Mantle
         AlreadySet,
     }
 
+    // Anything that can be serialized to and from a sequence of Core.Field: a single
+    // field, a set of fields, a repeating group, or a message.
     public interface IFields
     {
-        // TODO(roman): it would be nice to have human readable field names in addition to
-        // tag numbers. The could be used by ToString().
+        // TODO(roman): it would be nice if Fields property gave us human readable field names
+        // in addition to tag numbers. Thes could be used by ToString().
+
+        // Fields in serialized form.
         IEnumerable<Field> Fields { get; }
+
+        // Attempts to set a field from its serialized form. If the tag isn't recognized
+        // by the object, returns TagMismatch (this is not an error). If the object
+        // already has value for associated with the given tag, returns AlreadySet.
+        // Otherwise parses the value and returns Accepted. Throws if parsing fails.
         FieldAcceptance AcceptField(int tag, ArraySegment<byte> value);
     }
 
+    // A single FIX message.
     public interface IMessage : IFields
     {
         string Protocol { get; }
     }
 
+    // Factory and parser for FIX messages. The intent is to have separate factories
+    // for different FIX versions and dialects.
     public interface IMessageFactory
     {
         // Returns null for unknown message types.
+        // The 'fields' enumerator initially points to the first field in the
+        // message, BeginString<8>.
         IMessage CreateMessage(IEnumerator<Field> fields);
     }
 
+    // An adaptor from IEnumerable<IFields> to IFields: a sequence of IFields is IFields.
+    // Derived classes shall implement IEnumerator<IFields> GetEnumerator().
     public abstract class FieldSet : IFields, IEnumerable<IFields>
     {
         class FieldEnumerator : IEnumerable<Field>
@@ -80,6 +99,9 @@ namespace iFix.Mantle
         }
     }
 
+    // FIX repeating group: http://fixwiki.org/fixwiki/FPL:Tag_Value_Syntax#Repeating_Groups.
+    // Derived classes shall implement int GroupSizeTag { get; }.
+    // Use methods inherited from List<T> to manipulate the elements of the group.
     public abstract class FieldGroup<T> : List<T>, IFields where T : IFields, new()
     {
         class FieldEnumerator : IEnumerable<Field>
@@ -121,25 +143,42 @@ namespace iFix.Mantle
             }
         }
 
+        // Empty elements are ignored when serializing.
         public IEnumerable<Field> Fields { get { return new FieldEnumerator(this); } }
 
         public FieldAcceptance AcceptField(int tag, ArraySegment<byte> value)
         {
             if (Count == 0)
-                Add(new T());
-            FieldAcceptance res = this[Count - 1].AcceptField(tag, value);
-            if (res == FieldAcceptance.AlreadySet)
             {
-                Add(new T());
-                res = this[Count - 1].AcceptField(tag, value);
-                Debug.Assert(res == FieldAcceptance.Accepted);
+                T elem = new T();
+                FieldAcceptance res = elem.AcceptField(tag, value);
+                Debug.Assert(res != FieldAcceptance.AlreadySet);
+                if (res == FieldAcceptance.Accepted) Add(elem);
+                return res;
             }
-            return res;
+            else
+            {
+                FieldAcceptance res = this[Count - 1].AcceptField(tag, value);
+                if (res == FieldAcceptance.AlreadySet)
+                {
+                    Add(new T());
+                    res = this[Count - 1].AcceptField(tag, value);
+                    Debug.Assert(res == FieldAcceptance.Accepted);
+                }
+                return res;
+            }
         }
 
+        // Returns the tag number of the NumInGroup field associated with the group.
         protected abstract int GroupSizeTag { get; }
     }
 
+    // Base class for FIX fields with value type mapping to a struct CLR type,
+    // such as int or DateTime.
+    //
+    // This is effectively a nullable type with two representations: parsed and
+    // serialized. The two representations are kept in sync: whenever one is modified,
+    // the other one is changed as well.
     public abstract class StructField<T> : IFields where T : struct
     {
         class FieldEnumerator : IEnumerable<Field>
@@ -189,11 +228,14 @@ namespace iFix.Mantle
             return FieldAcceptance.Accepted;
         }
 
+        // Derived classes shall implement only the properties and methods listed below.
         protected abstract int Tag { get; }
         protected abstract ArraySegment<byte> Serialize(T value);
         protected abstract T Deserialize(ArraySegment<byte> bytes);
     }
 
+    // The same as StructField<T> but for class types. The two classes have idential
+    // interface.
     public abstract class ClassField<T> : IFields where T : class
     {
         class FieldEnumerator : IEnumerable<Field>
@@ -332,6 +374,8 @@ namespace iFix.Mantle
         }
     }
 
+    // All FIX messages, regardless of protocol version and dialect, start with
+    // Begin String <8>: http://www.onixs.biz/fix-dictionary/4.4/tagNum_8.html.
     public class BeginString : StringField
     {
         protected override int Tag { get { return 8; } }

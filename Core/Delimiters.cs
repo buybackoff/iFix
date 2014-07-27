@@ -1,7 +1,8 @@
 ﻿
 namespace iFix.Core
 {
-    class Delimiters
+    // The same delimiters are used in all versions of FIX protocol.
+    static class Delimiters
     {
         // Tags and values are separated by '='.
         public const byte TagValueSeparator = (byte)'=';

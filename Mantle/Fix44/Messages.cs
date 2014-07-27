@@ -2,19 +2,36 @@
 using System;
 using System.Collections.Generic;
 
+// This file defines a subset of messages supported by FIX 4.4.
+
 namespace iFix.Mantle.Fix44
 {
     // Message is missing MsgType<35> tag.
-    public class MsgTypeNotFound : Exception {}
+    public class MsgTypeNotFoundException : Exception {}
 
+    // Message from FIX client to FIX server (e.g., Exchange).
+    public interface IClientMessage : IMessage
+    {
+        T Visit<T>(IClientMessageVisitor<T> visitor);
+    }
+
+    // Message from FIX server (e.g., Exchange) to FIX client.
+    public interface IServerMessage : IMessage
+    {
+        T Visit<T>(IServerMessageVisitor<T> visitor);
+    }
+
+    // FIX 4.4 message. Could be either client or server message.
+    // Each message implements IClientMessage, IServerMessage or both.
     public abstract class Message : FieldSet, IMessage
     {
-        public abstract T Visit<T>(IMessageVisitor<T> visitor);
 
         public string Protocol { get { return Fix44.Protocol.Value; } }
     }
 
-    public interface IMessageVisitor<T>
+    // FIX server can use this interface to handle all types of messages
+    // that may be sent by the client.
+    public interface IClientMessageVisitor<T>
     {
         T Visit(Logon msg);
         T Visit(TestRequest msg);
@@ -25,9 +42,26 @@ namespace iFix.Mantle.Fix44
         T Visit(NewOrderSingle msg);
     }
 
+    // FIX client can use this interface to handle all types of messages
+    // that may be sent by the server.
+    public interface IServerMessageVisitor<T>
+    {
+        T Visit(Logon msg);
+        T Visit(TestRequest msg);
+        T Visit(Heartbeat msg);
+        T Visit(Reject msg);
+        T Visit(SequenceReset msg);
+        T Visit(ResendRequest msg);
+        T Visit(ExecutionReport msg);
+    }
+
+    // Factory and parser for FIX 4.4 client and server messages.
     public class MessageFactory : IMessageFactory
     {
-
+        // Throws if the message is malformed.
+        // Returns null if message type isn't recognized.
+        // If the result is not null, it's guaranteed to inherit from Fix44.Message
+        // and implement IClientMessage, IServerMessage, or both.
         public IMessage CreateMessage(IEnumerator<Field> fields)
         {
             MsgType msgType = FindMsgType(fields);
@@ -52,10 +86,11 @@ namespace iFix.Mantle.Fix44
             if (msgType.Value == SequenceReset.MsgType.Value) return new SequenceReset();
             if (msgType.Value == ResendRequest.MsgType.Value) return new ResendRequest();
             if (msgType.Value == NewOrderSingle.MsgType.Value) return new NewOrderSingle();
+            if (msgType.Value == ExecutionReport.MsgType.Value) return new ExecutionReport();
             return null;
         }
 
-        // Skips fields until it finds MsgType. Throws if MsgType can't be found.
+        // Skips fields until finds MsgType. Throws if MsgType can't be found.
         static MsgType FindMsgType(IEnumerator<Field> fields)
         {
             MsgType msgType = new MsgType();
@@ -65,17 +100,19 @@ namespace iFix.Mantle.Fix44
                 if (msgType.AcceptField(tag, fields.Current.Value) == FieldAcceptance.Accepted)
                     return msgType;
             }
-            throw new MsgTypeNotFound();
+            throw new MsgTypeNotFoundException();
         }
     }
 
-    public class Logon : Message
+    // FIX 4.4 messages: http://www.onixs.biz/fix-dictionary/4.4/msgs_by_msg_type.html.
+
+    // Logon <A>: http://www.onixs.biz/fix-dictionary/4.4/msgType_A_65.html.
+    public class Logon : Message, IClientMessage, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "A" };
         public StandardHeader StandardHeader = new StandardHeader();
         public EncryptMethod EncryptMethod = new EncryptMethod();
         public HeartBtInt HeartBtInt = new HeartBtInt();
-        // Only 'true' is supported at the moment.
         public ResetSeqNumFlag ResetSeqNumFlag = new ResetSeqNumFlag();
         public Password Password = new Password();
 
@@ -89,13 +126,19 @@ namespace iFix.Mantle.Fix44
             yield return Password;
         }
 
-        public override T Visit<T>(IMessageVisitor<T> visitor)
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
         {
             return visitor.Visit(this);
         }
     }
 
-    public class TestRequest : Message
+    // Test Request <1>: http://www.onixs.biz/fix-dictionary/4.4/msgType_1_1.html.
+    public class TestRequest : Message, IClientMessage, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "1" };
         public StandardHeader StandardHeader = new StandardHeader();
@@ -108,13 +151,19 @@ namespace iFix.Mantle.Fix44
             yield return TestReqID;
         }
 
-        public override T Visit<T>(IMessageVisitor<T> visitor)
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
         {
             return visitor.Visit(this);
         }
     }
 
-    public class Heartbeat : Message
+    // Heartbeat <0>: http://www.onixs.biz/fix-dictionary/4.4/msgType_0_0.html.
+    public class Heartbeat : Message, IClientMessage, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "0" };
         public StandardHeader StandardHeader = new StandardHeader();
@@ -127,13 +176,19 @@ namespace iFix.Mantle.Fix44
             yield return TestReqID;
         }
 
-        public override T Visit<T>(IMessageVisitor<T> visitor)
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
         {
             return visitor.Visit(this);
         }
     }
 
-    public class Reject : Message
+    // Reject <3>: http://www.onixs.biz/fix-dictionary/4.4/msgType_3_3.html.
+    public class Reject : Message, IClientMessage, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "3" };
         public StandardHeader StandardHeader = new StandardHeader();
@@ -154,13 +209,19 @@ namespace iFix.Mantle.Fix44
             yield return Text;
         }
 
-        public override T Visit<T>(IMessageVisitor<T> visitor)
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
         {
             return visitor.Visit(this);
         }
     }
 
-    public class SequenceReset : Message
+    // Sequence Reset <4>: http://www.onixs.biz/fix-dictionary/4.4/msgType_4_4.html.
+    public class SequenceReset : Message, IClientMessage, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "4" };
         public StandardHeader StandardHeader = new StandardHeader();
@@ -171,13 +232,19 @@ namespace iFix.Mantle.Fix44
             yield return StandardHeader;
         }
 
-        public override T Visit<T>(IMessageVisitor<T> visitor)
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
         {
             return visitor.Visit(this);
         }
     }
 
-    public class ResendRequest : Message
+    // Resend Request <2>: http://www.onixs.biz/fix-dictionary/4.4/msgType_2_2.html.
+    public class ResendRequest : Message, IClientMessage, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "2" };
         public StandardHeader StandardHeader = new StandardHeader();
@@ -188,13 +255,19 @@ namespace iFix.Mantle.Fix44
             yield return StandardHeader;
         }
 
-        public override T Visit<T>(IMessageVisitor<T> visitor)
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
         {
             return visitor.Visit(this);
         }
     }
 
-    public class NewOrderSingle : Message
+    // New Order Single <D>: http://www.onixs.biz/fix-dictionary/4.4/msgType_D_68.html.
+    public class NewOrderSingle : Message, IClientMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "D" };
         public StandardHeader StandardHeader = new StandardHeader();
@@ -223,7 +296,49 @@ namespace iFix.Mantle.Fix44
             yield return Price;
         }
 
-        public override T Visit<T>(IMessageVisitor<T> visitor)
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Execution Report <8>: http://www.onixs.biz/fix-dictionary/4.4/msgType_8_8.html.
+    public class ExecutionReport : Message, IServerMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "8" };
+        public StandardHeader StandardHeader = new StandardHeader();
+        public OrderID OrderID = new OrderID();
+        public ClOrdID ClOrdID = new ClOrdID();
+        public OrigClOrdID OrigClOrdID = new OrigClOrdID();
+        public ExecType ExecType = new ExecType();
+        public OrdStatus OrdStatus = new OrdStatus();
+        public OrdRejReason OrdRejReason = new OrdRejReason();
+        public LastQty LastQty = new LastQty();
+        public LastPx LastPx = new LastPx();
+        public LeavesQty LeavesQty = new LeavesQty();
+        public OrigOrderID OrigOrderID = new OrigOrderID();
+        public Text Text = new Text();
+        public MDEntryID MDEntryID = new MDEntryID();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return OrderID;
+            yield return ClOrdID;
+            yield return OrigClOrdID;
+            yield return ExecType;
+            yield return OrdStatus;
+            yield return OrdRejReason;
+            yield return LastQty;
+            yield return LastPx;
+            yield return LeavesQty;
+            yield return OrigOrderID;
+            yield return Text;
+            yield return MDEntryID;
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
         {
             return visitor.Visit(this);
         }
