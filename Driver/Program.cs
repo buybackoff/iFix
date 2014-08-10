@@ -46,17 +46,33 @@ namespace iFix.Driver
                 }
                 if (msg is Mantle.Fix44.Logon)
                 {
-                    Console.WriteLine("Sending marker order.");
+                    Console.WriteLine("Sending limit order.");
                     var order = new Mantle.Fix44.NewOrderSingle() { StandardHeader = MakeHeader() };
-                    order.ClOrdID.Value = "MyOrder4";
+                    order.ClOrdID.Value = "MyOrder3";
                     order.Account.Value = "MB9019501190";
                     order.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = "CETS" });
                     order.Instrument.Symbol.Value = "USD000UTSTOM";
-                    order.Side.Value = '2';  // 1 = Buy, 2 = Sell
+                    order.Side.Value = '1';  // 1 = Buy, 2 = Sell
                     order.TransactTime.Value = DateTime.Now;
-                    order.OrderQtyData.OrderQty.Value = 1;
-                    order.OrdType.Value = '1';  // 1 = Market, 2 = Limit
-                    order.Price.Value = 0;
+                    order.OrderQtyData.OrderQty.Value = 2;
+                    order.OrdType.Value = '2';  // 1 = Market, 2 = Limit
+                    order.Price.Value = 34.1m;
+                    Publisher.Publish(connection.Out, Mantle.Fix44.Protocol.Value, order);
+                }
+                if (msg is Mantle.Fix44.ExecutionReport && ((Mantle.Fix44.ExecutionReport)msg).ExecType.Value == '0')
+                {
+                    Console.WriteLine("Replacing limit order.");
+                    var order = new Mantle.Fix44.OrderCancelReplaceRequest() { StandardHeader = MakeHeader() };
+                    order.ClOrdID.Value = "MyOrder4";
+                    order.OrigClOrdID.Value = "MyOrder3";
+                    order.Account.Value = "MB9019501190";
+                    order.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = "CETS" });
+                    order.Instrument.Symbol.Value = "USD000UTSTOM";
+                    order.Side.Value = '1';  // 1 = Buy, 2 = Sell
+                    order.TransactTime.Value = DateTime.Now;
+                    order.OrderQty.Value = 1;
+                    order.OrdType.Value = '2';  // 1 = Market, 2 = Limit
+                    order.Price.Value = 34.15m;
                     Publisher.Publish(connection.Out, Mantle.Fix44.Protocol.Value, order);
                 }
             }

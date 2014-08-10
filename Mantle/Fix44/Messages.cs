@@ -40,6 +40,8 @@ namespace iFix.Mantle.Fix44
         T Visit(SequenceReset msg);
         T Visit(ResendRequest msg);
         T Visit(NewOrderSingle msg);
+        T Visit(OrderCancelRequest msg);
+        T Visit(OrderCancelReplaceRequest msg);
     }
 
     // FIX client can use this interface to handle all types of messages
@@ -86,6 +88,8 @@ namespace iFix.Mantle.Fix44
             if (msgType.Value == SequenceReset.MsgType.Value) return new SequenceReset();
             if (msgType.Value == ResendRequest.MsgType.Value) return new ResendRequest();
             if (msgType.Value == NewOrderSingle.MsgType.Value) return new NewOrderSingle();
+            if (msgType.Value == OrderCancelRequest.MsgType.Value) return new OrderCancelRequest();
+            if (msgType.Value == OrderCancelReplaceRequest.MsgType.Value) return new OrderCancelReplaceRequest();
             if (msgType.Value == ExecutionReport.MsgType.Value) return new ExecutionReport();
             return null;
         }
@@ -294,6 +298,72 @@ namespace iFix.Mantle.Fix44
             yield return OrderQtyData;
             yield return OrdType;
             yield return Price;
+        }
+
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Order Cancel Request <F>: http://www.onixs.biz/fix-dictionary/4.4/msgType_F_70.html.
+    public class OrderCancelRequest : Message, IClientMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "F" };
+        public StandardHeader StandardHeader = new StandardHeader();
+        public OrigClOrdID OrigClOrdID = new OrigClOrdID();
+        public ClOrdID ClOrdID = new ClOrdID();
+        public Side Side = new Side();
+        public TransactTime TransactTime = new TransactTime();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return OrigClOrdID;
+            yield return ClOrdID;
+            yield return Side;
+            yield return TransactTime;
+        }
+
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Order Cancel/Replace Request <G>: http://www.onixs.biz/fix-dictionary/4.4/msgType_G_71.html.
+    public class OrderCancelReplaceRequest : Message, IClientMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "G" };
+        public StandardHeader StandardHeader = new StandardHeader();
+        public ClOrdID ClOrdID = new ClOrdID();
+        public OrigClOrdID OrigClOrdID = new OrigClOrdID();
+        public Account Account = new Account();
+        public Instrument Instrument = new Instrument();
+        public Price Price = new Price();
+        public OrderQty OrderQty = new OrderQty();
+        public CancelOrigOnReject CancelOrigOnReject = new CancelOrigOnReject();
+        public TradingSessionIDGroup TradingSessionIDGroup = new TradingSessionIDGroup();
+        public OrdType OrdType = new OrdType();
+        public Side Side = new Side();
+        public TransactTime TransactTime = new TransactTime();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return ClOrdID;
+            yield return OrigClOrdID;
+            yield return Account;
+            yield return Instrument;
+            yield return Price;
+            yield return OrderQty;
+            yield return CancelOrigOnReject;
+            yield return TradingSessionIDGroup;
+            yield return OrdType;
+            yield return Side;
+            yield return TransactTime;
         }
 
         public T Visit<T>(IClientMessageVisitor<T> visitor)

@@ -111,7 +111,7 @@ namespace iFix.Core
         }
 
         // Serializes numbers [0, n). Numbers with less than width decimal digits
-        // a padded with leading zeros.
+        // are padded with leading zeros.
         static ArraySegment<byte>[] SerializeNumbers(int n, int width)
         {
             ArraySegment<byte>[] res = new ArraySegment<byte>[n];

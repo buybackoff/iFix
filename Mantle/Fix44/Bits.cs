@@ -182,6 +182,11 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 278; } }
     }
 
+    public class CancelOrigOnReject : BoolField
+    {
+        protected override int Tag { get { return 9619; } }
+    }
+
     // Component blocks: http://www.onixs.biz/fix-dictionary/4.4/#ComponentBlocks.
 
     // BeginString, BodyLength and MsgType are intentionally missing.
