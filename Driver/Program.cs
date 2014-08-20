@@ -46,6 +46,7 @@ namespace iFix.Driver
                 }
                 if (msg is Mantle.Fix44.Logon)
                 {
+                    /*
                     Console.WriteLine("Sending limit order.");
                     var order = new Mantle.Fix44.NewOrderSingle() { StandardHeader = MakeHeader() };
                     order.ClOrdID.Value = "MyOrder3";
@@ -57,11 +58,15 @@ namespace iFix.Driver
                     order.OrderQtyData.OrderQty.Value = 2;
                     order.OrdType.Value = '2';  // 1 = Market, 2 = Limit
                     order.Price.Value = 34.1m;
-                    Publisher.Publish(connection.Out, Mantle.Fix44.Protocol.Value, order);
+                    Publisher.Publish(connection.Out, Mantle.Fix44.Protocol.Value, order);*/
+                    Console.WriteLine("Requesting order status.");
+                    var req = new Mantle.Fix44.OrderStatusRequest() { StandardHeader = MakeHeader() };
+                    req.ClOrdID.Value = "MyOrder3";
+                    Publisher.Publish(connection.Out, Mantle.Fix44.Protocol.Value, req);
                 }
                 if (msg is Mantle.Fix44.ExecutionReport && ((Mantle.Fix44.ExecutionReport)msg).ExecType.Value == '0')
                 {
-                    Console.WriteLine("Replacing limit order.");
+                    /*Console.WriteLine("Replacing limit order.");
                     var order = new Mantle.Fix44.OrderCancelReplaceRequest() { StandardHeader = MakeHeader() };
                     order.ClOrdID.Value = "MyOrder4";
                     order.OrigClOrdID.Value = "MyOrder3";
@@ -73,7 +78,7 @@ namespace iFix.Driver
                     order.OrderQty.Value = 1;
                     order.OrdType.Value = '2';  // 1 = Market, 2 = Limit
                     order.Price.Value = 34.15m;
-                    Publisher.Publish(connection.Out, Mantle.Fix44.Protocol.Value, order);
+                    Publisher.Publish(connection.Out, Mantle.Fix44.Protocol.Value, order);*/
                 }
             }
         }
