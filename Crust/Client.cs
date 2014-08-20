@@ -302,7 +302,6 @@ namespace iFix.Crust
 
         static OrderState NewState(OrderState old, OrderReport report)
         {
-            // TODO: check what OrdStatus we get when we query status of inexisting order.
             if (report == null) return old;
             return new OrderState()
             {
@@ -379,68 +378,108 @@ namespace iFix.Crust
 
     class Session : IDisposable
     {
-        ClientConfig _cfg;
-        Connector _connector;
         Connection _connection;
         Mantle.Receiver _receiver;
-        bool _stopped = false;
-        Object _monitor = new Object();
-        long _lastOutSeqNum = 0;
-        Action<Mantle.Fix44.IServerMessage> _onMessage;
-        Thread _thread;
+        Object _sendMonitor = new Object();
+        long _lastSeqNum = 0;
 
-        public Session(ClientConfig cfg, Connector connector,
-                       Action<Mantle.Fix44.IServerMessage> onMessage)
+        public Session(Connection connection)
         {
-            _cfg = cfg;
-            _connector = connector;
-            _onMessage = onMessage;
-            _thread = new Thread(Loop);
-            _thread.Start();
+            _connection = connection;
+            var protocols = new Dictionary<string, Mantle.IMessageFactory>() {
+                { Mantle.Fix44.Protocol.Value, new Mantle.Fix44.MessageFactory() }
+            };
+            _receiver = new Mantle.Receiver(_connection.In, 1 << 20 /* 1MB max message size */, protocols);
+        }
+
+        public Mantle.Fix44.IServerMessage Receive()
+        {
+            return (Mantle.Fix44.IServerMessage)_receiver.Receive();
         }
 
         public void Send(Mantle.Fix44.IClientMessage msg)
         {
-            // TODO: Who sets the SeqNum for the outgoing message?
+            Mantle.Publisher.Publish(_connection.Out, Mantle.Fix44.Protocol.Value, msg);
         }
+
+        public long SeqNum()
+        {
+            return ++_lastSeqNum;
+        }
+
+        public Object SendMonitor { get { return _sendMonitor; } }
 
         public void Dispose()
         {
-            lock (_monitor)
+            _connection.Dispose();
+        }
+    }
+
+    // Client maintains a connection with the exchange, reopening it when necessary.
+    // It cancels all orders upon opening a new connection.
+    class Client : IDisposable
+    {
+        ClientConfig _cfg;
+        Connector _connector;
+        Session _session;
+        volatile bool _stopped = false;
+        Object _sessionMonitor = new Object();
+        Thread _receiverThread;
+        OrderHeap _orders = new OrderHeap();
+        BlockingCollection<OrderStateChangeEvent> _changeEvents = new BlockingCollection<OrderStateChangeEvent>();
+
+        public Client(ClientConfig cfg, Connector connector)
+        {
+            _cfg = cfg;
+            _connector = connector;
+            _receiverThread = new Thread(Loop);
+            _receiverThread.Start();
+        }
+
+        public IOrderCtrl SubmitOrder(NewOrderRequest request, Object orderKey)
+        {
+            return null;
+        }
+
+        BlockingCollection<OrderStateChangeEvent> OrderStateChanges { get { return _changeEvents; } }
+
+        public void Dispose()
+        {
+            _stopped = true;
+            Session session = GetSession(null);
+            if (session != null)
             {
-                if (!_stopped)
-                    _stopped = true;
-                if (_connection != null)
-                {
-                    _connection.Dispose();
-                    _connection = null;
-                }
+                try { session.Dispose(); }
+                catch (Exception) { }
             }
-            _thread.Join();
+            _receiverThread.Join();
         }
 
         void Loop()
         {
-            Mantle.Receiver receiver = null;
+            Session session = null;
             while (true)
             {
-                receiver = GetReceiver(receiver);
-                if (receiver == null) return;
+                session = GetSession(session);
+                if (session == null) return;
                 try
                 {
                     while (true)
                     {
-                        var msg = (Mantle.Fix44.IServerMessage)receiver.Receive();
+                        var msg = (Mantle.Fix44.IServerMessage)session.Receive();
                         if (msg is Mantle.Fix44.TestRequest)
                         {
-                            var heartbeat = new Mantle.Fix44.Heartbeat() { StandardHeader = MakeHeader() };
-                            heartbeat.TestReqID.Value = ((Mantle.Fix44.TestRequest)msg).TestReqID.Value;
-                            // TODO: Need ostream to publish and it should belong to the same connection
-                            // as the input. Sigh. Probably need to introduce InOut which is just a pair
-                            // of Receiver and output stream.
-                            // Mantle.Publisher.Publish(connection.Out, Mantle.Fix44.Protocol.Value, heartbeat);
+                            lock (session.SendMonitor)
+                            {
+                                var heartbeat = new Mantle.Fix44.Heartbeat() { StandardHeader = MakeHeader(session.SeqNum()) };
+                                heartbeat.TestReqID.Value = ((Mantle.Fix44.TestRequest)msg).TestReqID.Value;
+                                session.Send(heartbeat);
+                            }
                         }
-                        _onMessage.Invoke(msg);
+                        else
+                        {
+                            // TODO: dispatch on message type.
+                        }
                     }
                 }
                 catch (Exception)
@@ -450,94 +489,71 @@ namespace iFix.Crust
             }
         }
 
-        Mantle.Receiver GetReceiver(Mantle.Receiver old)
+        Session GetSession(Session old)
         {
-            lock (_monitor)
+            if (old != null)
             {
-                if (_stopped) return null;
-                if (_receiver != old) return _receiver;
-                Connect();
-                return _receiver;
+                try { _session.Dispose(); }
+                catch (Exception) { }
             }
-        }
-
-        Stream GetOutStream(Stream old)
-        {
-            lock (_monitor)
+            lock (_sessionMonitor)
             {
-                if (_stopped) return null;
-                if (_connection.Out != old) return _connection.Out;
-                Connect();
-                return _connection.Out;
-            }
-        }
-
-        void Connect()
-        {
-            while (true)
-            {
-                try
+                if (_session != old) return _session;
+                if (_session != null)
                 {
-                    _lastOutSeqNum = 0;
-                    if (_connection != null) _connection.Dispose();
-                    _connection = _connector.CreateConnection();
-                    var protocols = new Dictionary<string, Mantle.IMessageFactory>() {
-                        { Mantle.Fix44.Protocol.Value, new Mantle.Fix44.MessageFactory() }
-                    };
-                    _receiver = new Mantle.Receiver(_connection.In, 1 << 20 /* 1MB max message size */, protocols);
-                    Logon();
-                    // TODO: cancel all orders.
+                    try { _session.Dispose(); }
+                    catch (Exception) { }
+                    _session = null;
                 }
-                catch (Exception)
+                while (true)
                 {
-                    // TODO: log.
+                    if (_stopped) return null;
+                    try
+                    {
+                        _session = CreateSession();
+                        return _session;
+                    }
+                    catch (Exception)
+                    {
+                        // TODO: log.
+                    }
                 }
             }
         }
 
-        void Logon()
+        // Called with locked _sessionMonitor.
+        Session CreateSession()
         {
-            var logon = new Mantle.Fix44.Logon() { StandardHeader = MakeHeader() };
+            using (Session session = new Session(_connector.CreateConnection()))
+            {
+                Logon(session);
+                // TODO: request status for all orders. Don't wait for reply.
+                return session;
+            }
+        }
+
+        // Called with locked _sessionMonitor and null _session.
+        void Logon(Session session)
+        {
+            var logon = new Mantle.Fix44.Logon() { StandardHeader = MakeHeader(session.SeqNum()) };
             logon.EncryptMethod.Value = 0;
             logon.HeartBtInt.Value = _cfg.HeartBtInt;
             logon.Password.Value = _cfg.Password;
             logon.ResetSeqNumFlag.Value = true;
-            Mantle.Publisher.Publish(_connection.Out, Mantle.Fix44.Protocol.Value, logon);
-            if (!(_receiver.Receive() is Mantle.Fix44.Logon))
+            session.Send(logon);
+            if (!(session.Receive() is Mantle.Fix44.Logon))
                 throw new UnexpectedMessageReceived("Expected Logon");
         }
 
-        Mantle.Fix44.StandardHeader MakeHeader()
+        // May be called with null _session.
+        Mantle.Fix44.StandardHeader MakeHeader(long seqNum)
         {
             var res = new Mantle.Fix44.StandardHeader();
             res.SenderCompID.Value = _cfg.SenderCompID;
             res.TargetCompID.Value = _cfg.TargetCompID;
-            res.MsgSeqNum.Value = ++_lastOutSeqNum;
+            res.MsgSeqNum.Value = seqNum;
             res.SendingTime.Value = DateTime.Now;
             return res;
         }
-    }
-
-    // Client maintains a connection with the exchange, reopening it when necessary.
-    // It cancels all orders upon opening a new connection.
-    class Client
-    {
-        ClientConfig _cfg;
-        Connector _connector;
-        OrderHeap _orders = new OrderHeap();
-        BlockingCollection<OrderStateChangeEvent> _changeEvents = new BlockingCollection<OrderStateChangeEvent>();
-
-        public Client(ClientConfig cfg, Connector connector)
-        {
-            _cfg = cfg;
-            _connector = connector;
-        }
-
-        public IOrderCtrl SubmitOrder(NewOrderRequest request, Object orderKey)
-        {
-            return null;
-        }
-
-        BlockingCollection<OrderStateChangeEvent> OrderStateChanges { get { return _changeEvents; } }
     }
 }
