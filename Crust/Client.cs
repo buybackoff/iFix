@@ -33,7 +33,7 @@ namespace iFix.Crust
         // Replaced orders are also in Accepted status if they haven't been
         // filled yet.
         //
-        // Orders in this state ca be cancelled or replaced.
+        // Orders in this state can be cancelled or replaced.
         Accepted,
         // The order has been partially filled. Partially filled orders
         // can't be replaced but they can be cancelled.
@@ -48,11 +48,12 @@ namespace iFix.Crust
 
     class OrderState
     {
-        // When Status is Created, LeftQuantity is the initial order quantity.
+        // When Status is Created, LeftQuantity is the initial order quantity and FilledQuantity
+        // is zero.
         //
         // When Status is Accepted, LeftQuantity is positive and is equal to the order
         // quantity of the last replace request or the initial order creation request
-        // if there were no replacements.
+        // if there were no replacements. FilledQuantity is zero.
         //
         // When Status is PartiallyFilled, LeftQuantity is positive.
         //
@@ -109,15 +110,19 @@ namespace iFix.Crust
 
     enum RequestStatus
     {
+        // Request successful.
         OK,
+        // Request rejected by the exchange.
         Error,
+        // We didn't get a reply from the exchange and we don't expect
+        // one. The status of the request is unknown.
         Timeout,
     }
 
     // Describes a change to an order.
     class OrderStateChangeEvent
     {
-        // Equal to the key passed to Client.SubmitOrder.
+        // Equal to the key passed to Client.CreateOrder.
         public Object OrderKey;
         public IOrderCtrl OrderCtrl;
 
@@ -436,7 +441,7 @@ namespace iFix.Crust
             _receiverThread.Start();
         }
 
-        public IOrderCtrl SubmitOrder(NewOrderRequest request, Object orderKey)
+        public IOrderCtrl CreateOrder(NewOrderRequest request, Object orderKey)
         {
             return null;
         }
