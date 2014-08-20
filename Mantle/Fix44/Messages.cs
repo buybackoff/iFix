@@ -42,6 +42,8 @@ namespace iFix.Mantle.Fix44
         T Visit(NewOrderSingle msg);
         T Visit(OrderCancelRequest msg);
         T Visit(OrderCancelReplaceRequest msg);
+        T Visit(OrderMassCancelRequest msg);
+        T Visit(OrderStatusRequest msg);
     }
 
     // FIX client can use this interface to handle all types of messages
@@ -55,6 +57,8 @@ namespace iFix.Mantle.Fix44
         T Visit(SequenceReset msg);
         T Visit(ResendRequest msg);
         T Visit(ExecutionReport msg);
+        T Visit(OrderCancelReject msg);
+        T Visit(OrderMassCancelReport msg);
     }
 
     // Factory and parser for FIX 4.4 client and server messages.
@@ -91,6 +95,10 @@ namespace iFix.Mantle.Fix44
             if (msgType.Value == OrderCancelRequest.MsgType.Value) return new OrderCancelRequest();
             if (msgType.Value == OrderCancelReplaceRequest.MsgType.Value) return new OrderCancelReplaceRequest();
             if (msgType.Value == ExecutionReport.MsgType.Value) return new ExecutionReport();
+            if (msgType.Value == OrderCancelReject.MsgType.Value) return new OrderCancelReject();
+            if (msgType.Value == OrderMassCancelRequest.MsgType.Value) return new OrderMassCancelRequest();
+            if (msgType.Value == OrderMassCancelReport.MsgType.Value) return new OrderMassCancelReport();
+            if (msgType.Value == OrderStatusRequest.MsgType.Value) return new OrderStatusRequest();
             return null;
         }
 
@@ -409,6 +417,98 @@ namespace iFix.Mantle.Fix44
         }
 
         public T Visit<T>(IServerMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Order Cancel Reject <9>: http://www.onixs.biz/fix-dictionary/4.4/msgType_9_9.html.
+    public class OrderCancelReject : Message, IServerMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "9" };
+        public StandardHeader StandardHeader = new StandardHeader();
+        public ClOrdID ClOrdID = new ClOrdID();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return ClOrdID;
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Order Mass Cancel Request <q>: http://www.onixs.biz/fix-dictionary/4.4/msgType_q_113.html.
+    public class OrderMassCancelRequest : Message, IClientMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "q" };
+        public StandardHeader StandardHeader = new StandardHeader();
+        public ClOrdID ClOrdID = new ClOrdID();
+        public MassCancelRequestType MassCancelRequestType = new MassCancelRequestType();
+        public TradingSessionIDGroup TradingSessionIDGroup = new TradingSessionIDGroup();
+        public Instrument Instrument = new Instrument();
+        public TransactTime TransactTime = new TransactTime();
+        public Account Account = new Account();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return ClOrdID;
+            yield return MassCancelRequestType;
+            yield return TradingSessionIDGroup;
+            yield return Instrument;
+            yield return TransactTime;
+            yield return Account;
+        }
+
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Order Mass Cancel Report <r>: http://www.onixs.biz/fix-dictionary/4.4/msgType_r_114.html.
+    public class OrderMassCancelReport : Message, IServerMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "r" };
+        public StandardHeader StandardHeader = new StandardHeader();
+        public ClOrdID ClOrdID = new ClOrdID();
+        public MassCancelResponse MassCancelResponse = new MassCancelResponse();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return ClOrdID;
+            yield return MassCancelResponse;
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Order Status Request <H>: http://www.onixs.biz/fix-dictionary/4.4/msgType_H_72.html.
+    public class OrderStatusRequest : Message, IClientMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "H" };
+        public StandardHeader StandardHeader = new StandardHeader();
+        public ClOrdID ClOrdID = new ClOrdID();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return ClOrdID;
+        }
+
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
         {
             return visitor.Visit(this);
         }

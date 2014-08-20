@@ -187,6 +187,16 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 9619; } }
     }
 
+    public class MassCancelRequestType : CharField
+    {
+        protected override int Tag { get { return 530; } }
+    }
+
+    public class MassCancelResponse : CharField
+    {
+        protected override int Tag { get { return 531; } }
+    }
+
     // Component blocks: http://www.onixs.biz/fix-dictionary/4.4/#ComponentBlocks.
 
     // BeginString, BodyLength and MsgType are intentionally missing.
