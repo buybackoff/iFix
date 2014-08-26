@@ -1,22 +1,39 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace iFix.Crust
 {
-    class TcpConnection : Connection
+    class TcpConnection : IConnection
     {
         readonly TcpClient _client;
         readonly Stream _strm;
+        Mantle.Receiver _receiver;
+        long _lastSeqNum = 0;
 
         public TcpConnection(string host, int port)
         {
             _client = new TcpClient(host, port);
             _strm = _client.GetStream();
+            var protocols = new Dictionary<string, Mantle.IMessageFactory>() {
+                { Mantle.Fix44.Protocol.Value, new Mantle.Fix44.MessageFactory() }
+            };
+            _receiver = new Mantle.Receiver(_strm, 1 << 20, protocols);
         }
 
-        public Stream In { get { return _strm; } }
-        public Stream Out { get { return _strm; } }
+        public void Send(Mantle.Fix44.IMessage msg)
+        {
+            msg.Header.MsgSeqNum.Value = ++_lastSeqNum;
+            Mantle.Publisher.Publish(_strm, Mantle.Fix44.Protocol.Value, msg);
+        }
+
+        public async Task<Mantle.Fix44.IMessage> Receive(CancellationToken cancellationToken)
+        {
+            return (Mantle.Fix44.IServerMessage)await _receiver.Receive(cancellationToken);
+        }
 
         public void Dispose()
         {
@@ -31,7 +48,7 @@ namespace iFix.Crust
         }
     }
 
-    public class TcpConnector : Connector
+    public class TcpConnector : IConnector
     {
         readonly string _host;
         readonly int _port;
@@ -42,9 +59,9 @@ namespace iFix.Crust
             _port = port;
         }
 
-        public Connection CreateConnection()
+        public Task<IConnection> CreateConnection(CancellationToken cancellationToken)
         {
-            return new TcpConnection(_host, _port);
+            return new Task<IConnection>(() => new TcpConnection(_host, _port));
         }
     }
 }

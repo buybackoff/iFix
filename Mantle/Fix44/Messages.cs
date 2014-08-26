@@ -9,6 +9,12 @@ namespace iFix.Mantle.Fix44
     // Message is missing MsgType<35> tag.
     public class MsgTypeNotFoundException : Exception {}
 
+    // FIX.4.4 message.
+    public interface IMessage : Mantle.IMessage
+    {
+        StandardHeader Header { get; }
+    }
+
     // Message from FIX client to FIX server (e.g., Exchange).
     public interface IClientMessage : IMessage
     {
@@ -25,8 +31,9 @@ namespace iFix.Mantle.Fix44
     // Each message implements IClientMessage, IServerMessage or both.
     public abstract class Message : FieldSet, IMessage
     {
-
+        public StandardHeader StandardHeader = new StandardHeader();
         public string Protocol { get { return Fix44.Protocol.Value; } }
+        public StandardHeader Header { get { return StandardHeader; } }
     }
 
     // FIX server can use this interface to handle all types of messages
@@ -68,7 +75,7 @@ namespace iFix.Mantle.Fix44
         // Returns null if message type isn't recognized.
         // If the result is not null, it's guaranteed to inherit from Fix44.Message
         // and implement IClientMessage, IServerMessage, or both.
-        public IMessage CreateMessage(IEnumerator<Field> fields)
+        public Mantle.IMessage CreateMessage(IEnumerator<Field> fields)
         {
             MsgType msgType = FindMsgType(fields);
             IMessage msg = NewMessage(msgType);
@@ -122,7 +129,6 @@ namespace iFix.Mantle.Fix44
     public class Logon : Message, IClientMessage, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "A" };
-        public StandardHeader StandardHeader = new StandardHeader();
         public EncryptMethod EncryptMethod = new EncryptMethod();
         public HeartBtInt HeartBtInt = new HeartBtInt();
         public ResetSeqNumFlag ResetSeqNumFlag = new ResetSeqNumFlag();
@@ -153,7 +159,6 @@ namespace iFix.Mantle.Fix44
     public class TestRequest : Message, IClientMessage, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "1" };
-        public StandardHeader StandardHeader = new StandardHeader();
         public TestReqID TestReqID = new TestReqID();
 
         public override IEnumerator<IFields> GetEnumerator()
@@ -178,7 +183,6 @@ namespace iFix.Mantle.Fix44
     public class Heartbeat : Message, IClientMessage, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "0" };
-        public StandardHeader StandardHeader = new StandardHeader();
         public TestReqID TestReqID = new TestReqID();
 
         public override IEnumerator<IFields> GetEnumerator()
@@ -203,7 +207,6 @@ namespace iFix.Mantle.Fix44
     public class Reject : Message, IClientMessage, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "3" };
-        public StandardHeader StandardHeader = new StandardHeader();
         public RefSeqNum RefSeqNum = new RefSeqNum();
         public RefTagID RefTagID = new RefTagID();
         public RefMsgType RefMsgType = new RefMsgType();
@@ -236,7 +239,6 @@ namespace iFix.Mantle.Fix44
     public class SequenceReset : Message, IClientMessage, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "4" };
-        public StandardHeader StandardHeader = new StandardHeader();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
@@ -259,7 +261,6 @@ namespace iFix.Mantle.Fix44
     public class ResendRequest : Message, IClientMessage, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "2" };
-        public StandardHeader StandardHeader = new StandardHeader();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
@@ -282,7 +283,6 @@ namespace iFix.Mantle.Fix44
     public class NewOrderSingle : Message, IClientMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "D" };
-        public StandardHeader StandardHeader = new StandardHeader();
         public ClOrdID ClOrdID = new ClOrdID();
         public Account Account = new Account();
         public TradingSessionIDGroup TradingSessionIDGroup = new TradingSessionIDGroup();
@@ -318,7 +318,6 @@ namespace iFix.Mantle.Fix44
     public class OrderCancelRequest : Message, IClientMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "F" };
-        public StandardHeader StandardHeader = new StandardHeader();
         public OrigClOrdID OrigClOrdID = new OrigClOrdID();
         public ClOrdID ClOrdID = new ClOrdID();
         public Side Side = new Side();
@@ -344,7 +343,6 @@ namespace iFix.Mantle.Fix44
     public class OrderCancelReplaceRequest : Message, IClientMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "G" };
-        public StandardHeader StandardHeader = new StandardHeader();
         public ClOrdID ClOrdID = new ClOrdID();
         public OrigClOrdID OrigClOrdID = new OrigClOrdID();
         public Account Account = new Account();
@@ -384,7 +382,6 @@ namespace iFix.Mantle.Fix44
     public class ExecutionReport : Message, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "8" };
-        public StandardHeader StandardHeader = new StandardHeader();
         public OrderID OrderID = new OrderID();
         public ClOrdID ClOrdID = new ClOrdID();
         public OrigClOrdID OrigClOrdID = new OrigClOrdID();
@@ -426,7 +423,6 @@ namespace iFix.Mantle.Fix44
     public class OrderCancelReject : Message, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "9" };
-        public StandardHeader StandardHeader = new StandardHeader();
         public ClOrdID ClOrdID = new ClOrdID();
 
         public override IEnumerator<IFields> GetEnumerator()
@@ -446,7 +442,6 @@ namespace iFix.Mantle.Fix44
     public class OrderMassCancelRequest : Message, IClientMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "q" };
-        public StandardHeader StandardHeader = new StandardHeader();
         public ClOrdID ClOrdID = new ClOrdID();
         public MassCancelRequestType MassCancelRequestType = new MassCancelRequestType();
         public TradingSessionIDGroup TradingSessionIDGroup = new TradingSessionIDGroup();
@@ -476,7 +471,6 @@ namespace iFix.Mantle.Fix44
     public class OrderMassCancelReport : Message, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "r" };
-        public StandardHeader StandardHeader = new StandardHeader();
         public ClOrdID ClOrdID = new ClOrdID();
         public MassCancelResponse MassCancelResponse = new MassCancelResponse();
 
@@ -498,7 +492,6 @@ namespace iFix.Mantle.Fix44
     public class OrderStatusRequest : Message, IClientMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "H" };
-        public StandardHeader StandardHeader = new StandardHeader();
         public ClOrdID ClOrdID = new ClOrdID();
 
         public override IEnumerator<IFields> GetEnumerator()

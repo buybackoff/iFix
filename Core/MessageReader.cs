@@ -1,6 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace iFix.Core
 {
@@ -43,7 +46,7 @@ namespace iFix.Core
         //
         // Throws EmptyStreamException if nothing can be read from the
         // underlying stream.
-        public ArraySegment<byte> ReadMessage(Stream strm)
+        public async Task<ArraySegment<byte>> ReadMessage(Stream strm, CancellationToken cancellationToken)
         {
             Debug.Assert(strm != null);
             var trailerMatcher = new MessageTrailerMatcher();
@@ -53,7 +56,7 @@ namespace iFix.Core
             {
                 EnsureBufferSpace();
                 Debug.Assert(_endPos < _buf.Length);
-                int read = strm.Read(_buf, _endPos, _buf.Length - _endPos);
+                int read = await strm.ReadAsync(_buf, _endPos, _buf.Length - _endPos, cancellationToken);
                 if (read <= 0)
                     throw new EmptyStreamException();
                 messageEnd = trailerMatcher.FindTrailer(_buf, _endPos, _endPos + read);

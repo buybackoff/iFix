@@ -40,7 +40,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Client.cs" />
+    <Compile Include="Fix44\Client.cs" />
     <Compile Include="Connector.cs" />
+    <Compile Include="Fix44\DurableConnection.cs" />
+    <Compile Include="InitializingConnector.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TcpConnector.cs" />
   </ItemGroup>

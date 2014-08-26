@@ -1,31 +1,28 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace iFix.Crust
 {
-    class UnexpectedMessageReceived : Exception
-    {
-        public UnexpectedMessageReceived(string msg) : base(msg) { }
-    }
-
     // Every order starts in state Created.
     //
     // OrderStatus can only increase and can't go back: PartiallyFilled can transition
-    // to TearingDown or Finished and can't transition to Created or Accepted.
+    // to TearingDown or Finished but can't transition to Created or Accepted.
     //
     // All possible transitions:
     //   Created -> Accepted | Finished
     //   Accepted -> PartiallyFilled | TearingDown | Finished
     //   PartiallyFilled -> TearingDown | Finished
     //   TearingDown -> Finished
-    enum OrderStatus
+    //
+    // That's the theory. In practice, the client will always trust the exchange w.r.t. the
+    // order state. If the exchange tells us that the order has transitioned from Finished
+    // to Accepted, that's what we must believe; the client will generate a corresponding
+    // state change event without so much as blinking.
+    public enum OrderStatus
     {
         // The order hasn't yet been accepted by the exchange.
         Created,
@@ -46,18 +43,21 @@ namespace iFix.Crust
         Finished,
     }
 
-    class OrderState
+    // State of the order on the exchange. This is the ground truth and should always be trusted.
+    public class OrderState
     {
         // When Status is Created, LeftQuantity is the initial order quantity and FilledQuantity
         // is zero.
         //
-        // When Status is Accepted, LeftQuantity is positive and is equal to the order
-        // quantity of the last replace request or the initial order creation request
-        // if there were no replacements. FilledQuantity is zero.
+        // When Status is Accepted, LeftQuantity is positive and FilledQuantity is zero.
         //
         // When Status is PartiallyFilled, LeftQuantity is positive.
         //
         // When Status is Finished, LeftQuantity is zero.
+        //
+        // These are the expectations, but some of them can be violated if the exchange
+        // sends us explicit data to that effect. For example, if the exchange explicitly says
+        // that FileldQuantity = 10 and Status = Accepted, then that's what we'll have.
         public OrderStatus Status;
 
         // How many lots are still waiting to be filled.
@@ -74,13 +74,21 @@ namespace iFix.Crust
     // Allows controlling an order on the exchange.
     //
     // Thread-safe.
-    interface IOrderCtrl
+    public interface IOrderCtrl
     {
         // All methods return false and do nothing if the operation can't be performed
         // with the order in the current state.
         //
         // Since order state is updated asynchronously, there is no way to know in advance
         // which operations will succeed. You have to try them.
+        //
+        // All methods may perform synchronous IO and therefore may block.
+        //
+        // The requestKey parameter can be used key for identifying finished operations.
+        // When the operation finishes, an OrderStateChangeEvent with FinishedRequestKey equal
+        // to requestKey is generated. IOrderCtrl doesn't use this value in any way
+        // and doesn't require its uniqueness. If the caller doesn't need request keys,
+        // it's OK to pass null.
 
         // Sends a new order to the exchange.
         bool Submit(Object requestKey);
@@ -96,19 +104,21 @@ namespace iFix.Crust
 
     // Describes a successful trade, a.k.a. a fill. A single order may
     // have several fills, also called partial fills.
-    class Fill
+    public class Fill
     {
-        // How much did we but/sell at this trade fill?
+        // How much did we buy/sell at this trade fill?
         // The value is not cummulative. If an order triggered two
         // trades for 5 and 7 lots, we'll have two separate fills with Quantity = 5
         // and Quantity = 7.
         public decimal Quantity = 1;
+
         // Price at which we bought/sold per lot. We paid/got Quantity * Price.
         // The field is present only when the fill price is known.
         public decimal? Price = 2;
     }
 
-    enum RequestStatus
+    // What happened to our request (Submit, Cancel or Replace) to the exchange?
+    public enum RequestStatus
     {
         // Request successful.
         OK,
@@ -116,35 +126,35 @@ namespace iFix.Crust
         Error,
         // We didn't get a reply from the exchange and we don't expect
         // one. The status of the request is unknown.
-        Timeout,
+        Unknown,
     }
 
     // Describes a change to an order.
-    class OrderStateChangeEvent
+    public class OrderStateChangeEvent
     {
-        // Equal to the key passed to Client.CreateOrder.
+        // Equal to the key passed to IClient.CreateOrder().
         public Object OrderKey;
-        public IOrderCtrl OrderCtrl;
 
         // If one of the previously issued requests (Submit, Cancel or Replace)
         // has finished, FinishedRequestKey is its key and FinishedRequestStatus contains
         // the status. Otherwise these fields are null.
         public Object FinishedRequestKey;
-        public RequestStatus FinishedRequestStatus;
+        public RequestStatus? FinishedRequestStatus;
 
-        // What was the state of the order before the change?
-        public OrderState OldState;
-        // What is the state of the order after the change?
+        // What is the state of the order after the change? Never null.
         public OrderState NewState;
 
         // If not null, specifies how much we bought/sold and how much
         // it costed. Fills are not cumulative. If an order triggered two
         // trades for 1 lot each, we'll have two separate events each with
         // a fill with Quantity = 1.
+        //
+        // fill.Quantity is always equal to the difference between FilledQuantity
+        // in NewState and the previous state of the order.
         public Fill Fill;
     }
 
-    enum Side
+    public enum Side
     {
         // We are buying.
         Buy = 1,
@@ -152,413 +162,57 @@ namespace iFix.Crust
         Sell = -1,
     }
 
-    enum OrderType
+    public enum OrderType
     {
         Market,
         Limit,
     }
 
-    class NewOrderRequest
+    public class NewOrderRequest
     {
+        // All fields are required unless specified otherwise.
+
+        // Ticker symbol. For example, "USD000UTSTOM".
         public string Symbol;
+        // Do we want to buy or to sell?
         public Side Side;
+        // How many lots do we want to trade?
         public decimal Quantity;
+        // What kind of order should be placed?
         public OrderType OrderType;
-        // Must be set of limit orders.
+        // Price per lot. Must be set of limit orders.
         public decimal? Price;
     }
 
-    class ClientConfig
+    // Client for communication with the exchange. Allows placing orders, tracking and amending them.
+    // Does not provide market data for other market players.
+    //
+    // IClient is thread-safe. Its methods don't perform IO and don't block.
+    public interface IClient
     {
-        // Logon fields.
-        public int HeartBtInt;
-        public string Password;
+        // Creates a new order. The order isn't sent to the exchange and no events are generated for
+        // the order until IOrderCtrl.Submit() is called.
+        //
+        // Object orderKey can be used as an opaque key -- it's propagated along with every
+        // OrderStateChangeEvent related to the order. IClient doesn't use this value in any way
+        // and doesn't require its uniqueness. If the caller doesn't need order keys, it's OK to pass null.
+        //
+        // The state is set to the initial state of the order defined as follows:
+        //   Status = OrderStatus.Created
+        //   LeftQuantity = request.Quantity
+        //   Price = request.Price
+        //   FilledQuantity = 0
+        //
+        // It's OK to modify any of the objects passed as parameters after CreateOrder() returns.
+        IOrderCtrl CreateOrder(NewOrderRequest request, Object orderKey, out OrderState state);
 
-        // Common fields for all requests.
-        public string SenderCompID;
-        public string TargetCompID;
-
-        // Fields for posting, changing and cancelling orders.
-        public string Account;
-        public string TradingSessionID;
-    }
-
-    class OrderOp
-    {
-        public Order Order;
-        public Object Key;
-        public long RefSeqNum;
-        public string ClOrdID;
-        public decimal? Price;
-        public decimal? Quantity;
-        public OrderStatus TargetStatus;
-    }
-
-    enum ExecType
-    {
-        New,
-        Cancelled,
-        Replace,
-        PendingCancel,
-        Rejected,
-        Trade,
-        Other,
-    }
-
-    class OrderReport
-    {
-        public OrderStatus OrderStatus;
-        // Set only for limit orders.
-        public decimal? Price;
-        // Not set if OrdStatus is Pending Cancel.
-        public decimal? LeavesQuantity;
-        // Not set if OrdStatus is Pending Cancel.
-        public decimal? CumFillQuantity;
-        // These two fields are set on Fill reports.
-        public decimal? FillQuantity;
-        public decimal? FillPrice;
-    }
-
-    class Order
-    {
-        OrderState _state;
-        Object _key;
-        IOrderCtrl _ctrl;
-        List<OrderOp> _inflightOps = new List<OrderOp>();
-        string _origClOrdID;
-
-        public Order(NewOrderRequest request, Object key, IOrderCtrl ctrl, string origClOrdID)
-        {
-            _state = new OrderState()
-            {
-                Status = OrderStatus.Created,
-                LeftQuantity = request.Quantity,
-                Price = request.Price,
-                FilledQuantity = 0,
-            };
-            _key = key;
-            _ctrl = ctrl;
-            _origClOrdID = origClOrdID;
-        }
-
-        public OrderStatus CurrentStatus { get { return _state.Status; } }
-
-        public OrderStatus TargetStatus
-        {
-            get { return _inflightOps.Count > 0 ? _inflightOps[_inflightOps.Count - 1].TargetStatus : _state.Status; }
-        }
-
-        /*public bool CanSend(OrderOpType op)
-        {
-            OrderStatus expectedStatus =
-                _state.PendingStatus.HasValue ? _state.PendingStatus.Value : _state.Status;
-            switch (op)
-            {
-                case OrderOpType.Submit:
-                    return expectedStatus == OrderStatus.Created;
-                case OrderOpType.Cancel:
-                    return expectedStatus == OrderStatus.Accepted || expectedStatus == OrderStatus.PartiallyFilled;
-                case OrderOpType.Replace:
-                    return _orderType == OrderType.Limit && expectedStatus == OrderStatus.Accepted;
-            }
-            throw new ArgumentOutOfRangeException("op", op, "Unexpected value of OrderOpType");
-        }*/
-
-        public void OnSent(OrderOp op)
-        {
-            _inflightOps.Add(op);
-        }
-
-        // The op is not null if it's a reply to one of our requests.
-        // Request status makes sense only when op is not null.
-        // OrderReport may be null. This happens, for example, when we get Reject<3> to our request.
-        public OrderStateChangeEvent OnReceived(OrderOp op, RequestStatus requestStatus, OrderReport report)
-        {
-            OrderState newState = NewState(_state, report);
-            OrderStateChangeEvent e = new OrderStateChangeEvent()
-            {
-                OrderKey = _key,
-                OrderCtrl = _ctrl,
-                OldState = _state,
-                NewState = newState,
-                Fill = MakeFill(_state, newState, report),
-            };
-            if (op != null)
-            {
-                _inflightOps.Remove(op);
-                e.FinishedRequestKey = op.Key;
-                e.FinishedRequestStatus = requestStatus;
-            }
-            _state = newState;
-            return e;
-        }
-
-        // Can we remove this order from memory? It's safe to do if we can't send any
-        // useful requests to the exchange for this order (the order is in its terminal state)
-        // and we we don't expect any messages from the exchange for it (all pending operations
-        // have been completed).
-        public bool Done()
-        {
-            return _state.Status == OrderStatus.Finished && _inflightOps.Count == 0;
-        }
-
-        // ClOrdID of the New Order Request.
-        public string OrigClOrdID { get { return _origClOrdID; } }
-
-        static OrderState NewState(OrderState old, OrderReport report)
-        {
-            if (report == null) return old;
-            return new OrderState()
-            {
-                Status = report.OrderStatus,
-                LeftQuantity = report.LeavesQuantity.HasValue ? report.LeavesQuantity.Value : old.LeftQuantity,
-                FilledQuantity = report.CumFillQuantity.HasValue ? report.CumFillQuantity.Value : old.FilledQuantity,
-                Price = report.Price.HasValue ? report.Price.Value : old.Price,
-            };
-        }
-
-        static Fill MakeFill(OrderState oldState, OrderState newState, OrderReport report)
-        {
-            decimal qty = newState.FilledQuantity - oldState.FilledQuantity;
-            if (qty <= 0) return null;
-            if (report.FillPrice.HasValue && report.FillQuantity.HasValue && qty == report.FillQuantity.Value)
-                return new Fill() { Price = report.Price.Value, Quantity = qty };
-            else
-                return new Fill() { Quantity = qty };
-        }
-    }
-
-    class OrderHeap
-    {
-        Dictionary<long, OrderOp> _opsBySeqNum = new Dictionary<long, OrderOp>();
-        Dictionary<string, OrderOp> _opsByOrdID = new Dictionary<string, OrderOp>();
-        Dictionary<string, Order> _ordersByOrigOrdID = new Dictionary<string, Order>();
-
-        public void AddOrder(Order order)
-        {
-            _ordersByOrigOrdID[order.OrigClOrdID] = order;
-        }
-
-        public void OnSent(Order order, OrderOp op)
-        {
-            order.OnSent(op);
-            _opsBySeqNum[op.RefSeqNum] = op;
-            _opsByOrdID[op.ClOrdID] = op;
-        }
-
-        public OrderStateChangeEvent OnReceived(long? refSeqNum, string clOrdID, string origClOrdID,
-                                                RequestStatus requestStatus, OrderReport orderReport)
-        {
-            // Any request is finished when we receive Reject with the matching RefSeqNum or
-            // Execution Report with the matching ClOrdID.
-            // Additionally, Cancel is done when we receive Order Cancel Reject with the
-            // matching ClOrdID.
-            //
-            // An Execution Report matches an order if:
-            // 1. ClOrdID is equal to the ClOrdID of the message that created the order.
-            // 2. OrigClOrdID is equal to the ClOrdID of the message that created the order.
-            OrderOp op = null;
-            Order order = null;
-            if (refSeqNum.HasValue && _opsBySeqNum.TryGetValue(refSeqNum.Value, out op) ||
-                clOrdID != null && _opsByOrdID.TryGetValue(clOrdID, out op))
-            {
-                order = op.Order;
-            }
-            else if (origClOrdID != null)
-            {
-                _ordersByOrigOrdID.TryGetValue(origClOrdID, out order);
-            }
-            if (order == null) return null;
-            OrderStateChangeEvent res = order.OnReceived(op, requestStatus, orderReport);
-            if (op != null)
-            {
-                _opsBySeqNum.Remove(op.RefSeqNum);
-                _opsByOrdID.Remove(op.ClOrdID);
-            }
-            if (order.Done())
-                _ordersByOrigOrdID.Remove(order.OrigClOrdID);
-            return res;
-        }
-    }
-
-    class Session : IDisposable
-    {
-        Connection _connection;
-        Mantle.Receiver _receiver;
-        Object _sendMonitor = new Object();
-        long _lastSeqNum = 0;
-
-        public Session(Connection connection)
-        {
-            _connection = connection;
-            var protocols = new Dictionary<string, Mantle.IMessageFactory>() {
-                { Mantle.Fix44.Protocol.Value, new Mantle.Fix44.MessageFactory() }
-            };
-            _receiver = new Mantle.Receiver(_connection.In, 1 << 20 /* 1MB max message size */, protocols);
-        }
-
-        public Mantle.Fix44.IServerMessage Receive()
-        {
-            return (Mantle.Fix44.IServerMessage)_receiver.Receive();
-        }
-
-        public void Send(Mantle.Fix44.IClientMessage msg)
-        {
-            Mantle.Publisher.Publish(_connection.Out, Mantle.Fix44.Protocol.Value, msg);
-        }
-
-        public long SeqNum()
-        {
-            return ++_lastSeqNum;
-        }
-
-        public Object SendMonitor { get { return _sendMonitor; } }
-
-        public void Dispose()
-        {
-            _connection.Dispose();
-        }
-    }
-
-    // Client maintains a connection with the exchange, reopening it when necessary.
-    // It cancels all orders upon opening a new connection.
-    class Client : IDisposable
-    {
-        ClientConfig _cfg;
-        Connector _connector;
-        Session _session;
-        volatile bool _stopped = false;
-        Object _sessionMonitor = new Object();
-        Thread _receiverThread;
-        OrderHeap _orders = new OrderHeap();
-        BlockingCollection<OrderStateChangeEvent> _changeEvents = new BlockingCollection<OrderStateChangeEvent>();
-
-        public Client(ClientConfig cfg, Connector connector)
-        {
-            _cfg = cfg;
-            _connector = connector;
-            _receiverThread = new Thread(Loop);
-            _receiverThread.Start();
-        }
-
-        public IOrderCtrl CreateOrder(NewOrderRequest request, Object orderKey)
-        {
-            return null;
-        }
-
-        BlockingCollection<OrderStateChangeEvent> OrderStateChanges { get { return _changeEvents; } }
-
-        public void Dispose()
-        {
-            _stopped = true;
-            Session session = GetSession(null);
-            if (session != null)
-            {
-                try { session.Dispose(); }
-                catch (Exception) { }
-            }
-            _receiverThread.Join();
-        }
-
-        void Loop()
-        {
-            Session session = null;
-            while (true)
-            {
-                session = GetSession(session);
-                if (session == null) return;
-                try
-                {
-                    while (true)
-                    {
-                        var msg = (Mantle.Fix44.IServerMessage)session.Receive();
-                        if (msg is Mantle.Fix44.TestRequest)
-                        {
-                            lock (session.SendMonitor)
-                            {
-                                var heartbeat = new Mantle.Fix44.Heartbeat() { StandardHeader = MakeHeader(session.SeqNum()) };
-                                heartbeat.TestReqID.Value = ((Mantle.Fix44.TestRequest)msg).TestReqID.Value;
-                                session.Send(heartbeat);
-                            }
-                        }
-                        else
-                        {
-                            // TODO: dispatch on message type.
-                        }
-                    }
-                }
-                catch (Exception)
-                {
-                    // TODO: log.
-                }
-            }
-        }
-
-        Session GetSession(Session old)
-        {
-            if (old != null)
-            {
-                try { _session.Dispose(); }
-                catch (Exception) { }
-            }
-            lock (_sessionMonitor)
-            {
-                if (_session != old) return _session;
-                if (_session != null)
-                {
-                    try { _session.Dispose(); }
-                    catch (Exception) { }
-                    _session = null;
-                }
-                while (true)
-                {
-                    if (_stopped) return null;
-                    try
-                    {
-                        _session = CreateSession();
-                        return _session;
-                    }
-                    catch (Exception)
-                    {
-                        // TODO: log.
-                    }
-                }
-            }
-        }
-
-        // Called with locked _sessionMonitor.
-        Session CreateSession()
-        {
-            using (Session session = new Session(_connector.CreateConnection()))
-            {
-                Logon(session);
-                // TODO: request status for all orders. Don't wait for reply.
-                return session;
-            }
-        }
-
-        // Called with locked _sessionMonitor and null _session.
-        void Logon(Session session)
-        {
-            var logon = new Mantle.Fix44.Logon() { StandardHeader = MakeHeader(session.SeqNum()) };
-            logon.EncryptMethod.Value = 0;
-            logon.HeartBtInt.Value = _cfg.HeartBtInt;
-            logon.Password.Value = _cfg.Password;
-            logon.ResetSeqNumFlag.Value = true;
-            session.Send(logon);
-            if (!(session.Receive() is Mantle.Fix44.Logon))
-                throw new UnexpectedMessageReceived("Expected Logon");
-        }
-
-        // May be called with null _session.
-        Mantle.Fix44.StandardHeader MakeHeader(long seqNum)
-        {
-            var res = new Mantle.Fix44.StandardHeader();
-            res.SenderCompID.Value = _cfg.SenderCompID;
-            res.TargetCompID.Value = _cfg.TargetCompID;
-            res.MsgSeqNum.Value = seqNum;
-            res.SendingTime.Value = DateTime.Now;
-            return res;
-        }
+        // Returns an ordered sequence of changes to the submitted orders. Each call to the methods
+        // of IOrderCtrl that return true eventually generates exactly one event. More events can
+        // be generated by the exchange itself without any action on the client.
+        //
+        // The consumer of the events MUST NOT modify them. It's guaranteed that they stay constant.
+        //
+        // Always returns the same object.
+        BlockingCollection<OrderStateChangeEvent> OrderStateChanges { get; }
     }
 }

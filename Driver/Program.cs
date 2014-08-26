@@ -2,6 +2,7 @@
 using iFix.Mantle;
 using iFix.Crust;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace iFix.Driver
 {
@@ -21,65 +22,71 @@ namespace iFix.Driver
 
         public static void Main(string[] args)
         {
-            var tcpConnector = new TcpConnector("194.84.44.1", 9212);
-            var connection = tcpConnector.CreateConnection();
-            var protocols = new Dictionary<string, IMessageFactory>() {
-                { Mantle.Fix44.Protocol.Value, new Mantle.Fix44.MessageFactory() }
-            };
-            var receiver = new Receiver(connection.In, 1 << 20, protocols);
-            var logon = new Mantle.Fix44.Logon() { StandardHeader = MakeHeader() };
-            logon.EncryptMethod.Value = 0;
-            logon.HeartBtInt.Value = 30;
-            logon.Password.Value = "7118";
-            logon.ResetSeqNumFlag.Value = true;
-            Publisher.Publish(connection.Out, Mantle.Fix44.Protocol.Value, logon);
-            while (true)
+            try
             {
-                IMessage msg = receiver.Receive();
-                Console.WriteLine("Received {0}", msg.GetType().Name);
-                if (msg is Mantle.Fix44.TestRequest)
+                var tcpConnector = new TcpConnector("194.84.44.1", 9212);
+                var connection = tcpConnector.CreateConnection(CancellationToken.None).Result;
+                var protocols = new Dictionary<string, IMessageFactory>() {
+                    { Mantle.Fix44.Protocol.Value, new Mantle.Fix44.MessageFactory() }
+                };
+                var logon = new Mantle.Fix44.Logon() { StandardHeader = MakeHeader() };
+                logon.EncryptMethod.Value = 0;
+                logon.HeartBtInt.Value = 30;
+                logon.Password.Value = "7118";
+                logon.ResetSeqNumFlag.Value = true;
+                connection.Send(logon);
+                while (true)
                 {
-                    Console.WriteLine("Sending Heartbeat.");
-                    var heartbeat = new Mantle.Fix44.Heartbeat() { StandardHeader = MakeHeader() };
-                    heartbeat.TestReqID.Value = ((Mantle.Fix44.TestRequest)msg).TestReqID.Value;
-                    Publisher.Publish(connection.Out, Mantle.Fix44.Protocol.Value, heartbeat);
+                    IMessage msg = connection.Receive(CancellationToken.None).Result;
+                    Console.WriteLine("Received {0}", msg.GetType().Name);
+                    if (msg is Mantle.Fix44.TestRequest)
+                    {
+                        Console.WriteLine("Sending Heartbeat.");
+                        var heartbeat = new Mantle.Fix44.Heartbeat() { StandardHeader = MakeHeader() };
+                        heartbeat.TestReqID.Value = ((Mantle.Fix44.TestRequest)msg).TestReqID.Value;
+                        connection.Send(heartbeat);
+                    }
+                    if (msg is Mantle.Fix44.Logon)
+                    {
+                        /*
+                        Console.WriteLine("Sending limit order.");
+                        var order = new Mantle.Fix44.NewOrderSingle() { StandardHeader = MakeHeader() };
+                        order.ClOrdID.Value = "MyOrder3";
+                        order.Account.Value = "MB9019501190";
+                        order.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = "CETS" });
+                        order.Instrument.Symbol.Value = "USD000UTSTOM";
+                        order.Side.Value = '1';  // 1 = Buy, 2 = Sell
+                        order.TransactTime.Value = DateTime.Now;
+                        order.OrderQtyData.OrderQty.Value = 2;
+                        order.OrdType.Value = '2';  // 1 = Market, 2 = Limit
+                        order.Price.Value = 34.1m;
+                        connection.Send(order);*/
+                        Console.WriteLine("Requesting order status.");
+                        var req = new Mantle.Fix44.OrderStatusRequest() { StandardHeader = MakeHeader() };
+                        req.ClOrdID.Value = "MyOrder3";
+                        connection.Send(req);
+                    }
+                    if (msg is Mantle.Fix44.ExecutionReport && ((Mantle.Fix44.ExecutionReport)msg).ExecType.Value == '0')
+                    {
+                        /*Console.WriteLine("Replacing limit order.");
+                        var order = new Mantle.Fix44.OrderCancelReplaceRequest() { StandardHeader = MakeHeader() };
+                        order.ClOrdID.Value = "MyOrder4";
+                        order.OrigClOrdID.Value = "MyOrder3";
+                        order.Account.Value = "MB9019501190";
+                        order.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = "CETS" });
+                        order.Instrument.Symbol.Value = "USD000UTSTOM";
+                        order.Side.Value = '1';  // 1 = Buy, 2 = Sell
+                        order.TransactTime.Value = DateTime.Now;
+                        order.OrderQty.Value = 1;
+                        order.OrdType.Value = '2';  // 1 = Market, 2 = Limit
+                        order.Price.Value = 34.15m;
+                        connection.Send(order);*/
+                    }
                 }
-                if (msg is Mantle.Fix44.Logon)
-                {
-                    /*
-                    Console.WriteLine("Sending limit order.");
-                    var order = new Mantle.Fix44.NewOrderSingle() { StandardHeader = MakeHeader() };
-                    order.ClOrdID.Value = "MyOrder3";
-                    order.Account.Value = "MB9019501190";
-                    order.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = "CETS" });
-                    order.Instrument.Symbol.Value = "USD000UTSTOM";
-                    order.Side.Value = '1';  // 1 = Buy, 2 = Sell
-                    order.TransactTime.Value = DateTime.Now;
-                    order.OrderQtyData.OrderQty.Value = 2;
-                    order.OrdType.Value = '2';  // 1 = Market, 2 = Limit
-                    order.Price.Value = 34.1m;
-                    Publisher.Publish(connection.Out, Mantle.Fix44.Protocol.Value, order);*/
-                    Console.WriteLine("Requesting order status.");
-                    var req = new Mantle.Fix44.OrderStatusRequest() { StandardHeader = MakeHeader() };
-                    req.ClOrdID.Value = "MyOrder3";
-                    Publisher.Publish(connection.Out, Mantle.Fix44.Protocol.Value, req);
-                }
-                if (msg is Mantle.Fix44.ExecutionReport && ((Mantle.Fix44.ExecutionReport)msg).ExecType.Value == '0')
-                {
-                    /*Console.WriteLine("Replacing limit order.");
-                    var order = new Mantle.Fix44.OrderCancelReplaceRequest() { StandardHeader = MakeHeader() };
-                    order.ClOrdID.Value = "MyOrder4";
-                    order.OrigClOrdID.Value = "MyOrder3";
-                    order.Account.Value = "MB9019501190";
-                    order.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = "CETS" });
-                    order.Instrument.Symbol.Value = "USD000UTSTOM";
-                    order.Side.Value = '1';  // 1 = Buy, 2 = Sell
-                    order.TransactTime.Value = DateTime.Now;
-                    order.OrderQty.Value = 1;
-                    order.OrdType.Value = '2';  // 1 = Market, 2 = Limit
-                    order.Price.Value = 34.15m;
-                    Publisher.Publish(connection.Out, Mantle.Fix44.Protocol.Value, order);*/
-                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Caught an exception: {0}", e);
             }
         }
     }

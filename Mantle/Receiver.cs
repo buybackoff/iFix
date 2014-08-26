@@ -2,6 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace iFix.Mantle
 {
@@ -31,12 +33,12 @@ namespace iFix.Mantle
 
         // Only one thread at a time is allowed to call Receive().
         // If it throws, the receiver is no longer usable and should be destroyed.
-        public IMessage Receive()
+        public async Task<IMessage> Receive(CancellationToken cancellationToken)
         {
             // Loop until we get a message of known type.
             while (true)
             {
-                var raw = new RawMessage(_reader.ReadMessage(_in));
+                var raw = new RawMessage(await _reader.ReadMessage(_in, cancellationToken));
                 Console.WriteLine("IN: {0}", raw);
                 IEnumerator<Field> fields = raw.GetEnumerator();
                 IMessageFactory factory = GetFactory(fields);
