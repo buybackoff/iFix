@@ -67,14 +67,12 @@ namespace iFix.Crust.Fix44
     class Order
     {
         OrderState _state;
-        readonly Object _key;
         readonly List<OrderOp> _inflightOps = new List<OrderOp>();
         readonly string _origClOrdID;
 
-        public Order(OrderState state, Object key, string origClOrdID)
+        public Order(OrderState state, string origClOrdID)
         {
             _state = state;
-            _key = key;
             _origClOrdID = origClOrdID;
         }
 
@@ -113,7 +111,6 @@ namespace iFix.Crust.Fix44
             _state = NewState(oldState, report);
             OrderStateChangeEvent e = new OrderStateChangeEvent()
             {
-                OrderKey = _key,
                 NewState = _state,
                 Fill = MakeFill(oldState, _state, report),
             };
@@ -256,7 +253,6 @@ namespace iFix.Crust.Fix44
         DurableConnection _connection;
         OrderHeap _orders = new OrderHeap();
         Object _ordersMonitor = new Object();
-        BlockingCollection<OrderStateChangeEvent> _changeEvents = new BlockingCollection<OrderStateChangeEvent>();
 
         public Client(ClientConfig cfg, IConnector connector)
         {
@@ -264,19 +260,10 @@ namespace iFix.Crust.Fix44
             _connection = new DurableConnection(new InitializingConnector(connector, Logon));
         }
 
-        public IOrderCtrl CreateOrder(NewOrderRequest request, Object orderKey, out OrderState state)
+        public IOrderCtrl CreateOrder(NewOrderRequest request, Action<OrderStateChangeEvent> onChange)
         {
-            state = new OrderState()
-            {
-                Status = OrderStatus.Created,
-                LeftQuantity = request.Quantity,
-                Price = request.Price,
-                FilledQuantity = 0,
-            };
             return null;
         }
-
-        public BlockingCollection<OrderStateChangeEvent> OrderStateChanges { get { return _changeEvents; } }
 
         public void Dispose()
         {
