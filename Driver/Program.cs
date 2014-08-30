@@ -25,18 +25,18 @@ namespace iFix.Driver
             try
             {
                 var tcpConnector = new TcpConnector("194.84.44.1", 9212);
+                Console.WriteLine("Connecting");
                 var connection = tcpConnector.CreateConnection(CancellationToken.None).Result;
-                var protocols = new Dictionary<string, IMessageFactory>() {
-                    { Mantle.Fix44.Protocol.Value, new Mantle.Fix44.MessageFactory() }
-                };
                 var logon = new Mantle.Fix44.Logon() { StandardHeader = MakeHeader() };
                 logon.EncryptMethod.Value = 0;
                 logon.HeartBtInt.Value = 30;
                 logon.Password.Value = "7118";
                 logon.ResetSeqNumFlag.Value = true;
+                Console.WriteLine("Sending logon");
                 connection.Send(logon);
                 while (true)
                 {
+                    Console.WriteLine("Reading message");
                     IMessage msg = connection.Receive(CancellationToken.None).Result;
                     Console.WriteLine("Received {0}", msg.GetType().Name);
                     if (msg is Mantle.Fix44.TestRequest)

@@ -61,7 +61,9 @@ namespace iFix.Crust
 
         public Task<IConnection> CreateConnection(CancellationToken cancellationToken)
         {
-            return new Task<IConnection>(() => new TcpConnection(_host, _port));
+            var res = new Task<IConnection>(() => new TcpConnection(_host, _port));
+            res.Start();
+            return res;
         }
     }
 }

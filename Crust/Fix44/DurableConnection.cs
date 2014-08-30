@@ -20,6 +20,7 @@ namespace iFix.Crust.Fix44
         // When _refCount reaches zero, it's safe to close the connection.
         CountdownEvent _refCount = new CountdownEvent(0);
 
+        // The initial reference count is zero.
         public Session(IConnection connection)
         {
             _connection = connection;
@@ -36,13 +37,17 @@ namespace iFix.Crust.Fix44
         }
 
         // Requires: ref count is not zero for the whole duration of Receive(), both
-        // it synchronous and asynchronous parts.
+        // its synchronous and asynchronous parts.
+        //
+        // It's not allowed to called Receive() until the task created by the previous call
+        // to Receive() has finished.
         public Task<Mantle.Fix44.IMessage> Receive()
         {
             return _connection.Receive(_cancellation.Token);
         }
 
         // Requires: ref count is not zero for the whole duration of Send().
+        // Concurrent calls are not allowed.
         public void Send(Mantle.Fix44.IMessage msg)
         {
             _connection.Send(msg);
@@ -58,13 +63,13 @@ namespace iFix.Crust.Fix44
         {
             lock (_monitor)
             {
-                if (_connection == null) return;
+                if (_connection == null) return;  // Already disposed of.
                 _cancellation.Cancel();
                 _refCount.Wait();
                 _connection.Dispose();
                 _cancellation.Dispose();
                 _refCount.Dispose();
-                // To mark that the object has been disposed of.
+                // Mark that the object has been disposed of.
                 _connection = null;
             }
         }
@@ -92,6 +97,9 @@ namespace iFix.Crust.Fix44
             _connector = connector;
         }
 
+        // It's not allowed to called Receive() until the task created by the previous call
+        // to Receive() has finished.
+        //
         // Returns a non-null task containing null message if the object has been
         // disposed of.
         public async Task<Mantle.Fix44.IMessage> Receive()
@@ -122,7 +130,8 @@ namespace iFix.Crust.Fix44
         }
 
         // Returns false if the object has been disposed of.
-        // Never throws.
+        // Never throws. Can be called concurrently -- all calls will be
+        // serialized internally.
         public bool Send(Mantle.Fix44.IMessage msg)
         {
             lock (_sendMonitor)

@@ -56,7 +56,9 @@ namespace iFix.Core
             {
                 EnsureBufferSpace();
                 Debug.Assert(_endPos < _buf.Length);
+                Console.WriteLine("Calling ReadAsync");
                 int read = await strm.ReadAsync(_buf, _endPos, _buf.Length - _endPos, cancellationToken);
+                Console.WriteLine("ReadAsync finished");
                 if (read <= 0)
                     throw new EmptyStreamException();
                 messageEnd = trailerMatcher.FindTrailer(_buf, _endPos, _endPos + read);

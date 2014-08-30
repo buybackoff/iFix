@@ -247,7 +247,7 @@ namespace iFix.Crust.Fix44
         }
     }
 
-    class Client : IDisposable, IClient
+    class Client : IClient
     {
         ClientConfig _cfg;
         DurableConnection _connection;
