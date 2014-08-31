@@ -199,7 +199,7 @@ namespace iFix.Crust
         // The order isn't sent to the exchange and no events are generated for
         // the order until IOrderCtrl.Submit() is called.
         //
-        // It's OK to modify 'request' after CreateOrder() returns.
+        // It's not allowed to modify 'request' after passing it to CreateOrder().
         IOrderCtrl CreateOrder(NewOrderRequest request, Action<OrderStateChangeEvent> onChange);
     }
 }

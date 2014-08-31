@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +13,8 @@ namespace iFix.Crust.Fix44
     {
         // If null, the object has been disposed.
         IConnection _connection;
+        // Session identifier. Unique within the process.
+        long _id;
         // Used only in Dispose() to make it reentrant and thread-safe.
         Object _monitor = new Object();
         // When Dispose() is called, we signal all inflight Send() and Receive() calls
@@ -21,10 +24,13 @@ namespace iFix.Crust.Fix44
         CountdownEvent _refCount = new CountdownEvent(0);
 
         // The initial reference count is zero.
-        public Session(IConnection connection)
+        public Session(IConnection connection, long id)
         {
             _connection = connection;
+            _id = id;
         }
+
+        public long ID { get { return _id; } }
 
         public void IncRef()
         {
@@ -48,9 +54,9 @@ namespace iFix.Crust.Fix44
 
         // Requires: ref count is not zero for the whole duration of Send().
         // Concurrent calls are not allowed.
-        public void Send(Mantle.Fix44.IMessage msg)
+        public long Send(Mantle.Fix44.IMessage msg)
         {
-            _connection.Send(msg);
+            return _connection.Send(msg);
         }
 
         // Waits for the ref count to drop to zero and closes the connection.
@@ -75,6 +81,36 @@ namespace iFix.Crust.Fix44
         }
     }
 
+    class DurableSeqNum : IEquatable<DurableSeqNum>
+    {
+        public long SessionID;
+        public long SeqNum;
+
+        public bool Equals(DurableSeqNum other)
+        {
+            return other != null && SessionID == other.SessionID && SeqNum == other.SeqNum;
+        }
+
+        public override bool Equals(Object obj)
+        {
+            return Equals(obj as DurableSeqNum);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                return (int)(SessionID * 2654435761 + SeqNum);
+            }
+        }
+    }
+
+    class DurableMessage
+    {
+        public long SessionID;
+        public Mantle.Fix44.IMessage Message;
+    }
+
     // A connection with the exchange with automatic reconnects on failures.
     class DurableConnection
     {
@@ -82,7 +118,8 @@ namespace iFix.Crust.Fix44
         // The current session that we believe to be valid.
         // Access to the reference is protected by _sessionMonitor.
         Session _session = null;
-        // Protects access to _session.
+        long _sessionID = 0;
+        // Protects access to _session and _sessionID.
         readonly Object _sessionMonitor = new Object();
         // This monitor is used to guarantee that at most one thread is sending
         // data at a time.
@@ -102,7 +139,7 @@ namespace iFix.Crust.Fix44
         //
         // Returns a non-null task containing null message if the object has been
         // disposed of.
-        public async Task<Mantle.Fix44.IMessage> Receive()
+        public async Task<DurableMessage> Receive()
         {
             Session session = null;
             while (true)
@@ -111,16 +148,14 @@ namespace iFix.Crust.Fix44
                 {
                     session = GetSession(session);
                     if (session == null) return null;
-                    Mantle.Fix44.IMessage res;
                     try
                     {
-                        res = await session.Receive();
+                        return new DurableMessage { SessionID = session.ID, Message = await session.Receive() };
                     }
                     finally
                     {
                         session.DecRef();
                     }
-                    return res;
                 }
                 catch (Exception)
                 {
@@ -129,10 +164,12 @@ namespace iFix.Crust.Fix44
             }
         }
 
-        // Returns false if the object has been disposed of.
+        // Returns null if the object has been disposed of, otherwise returns
+        // sequence number of the sent message.
+        //
         // Never throws. Can be called concurrently -- all calls will be
         // serialized internally.
-        public bool Send(Mantle.Fix44.IMessage msg)
+        public DurableSeqNum Send(Mantle.Fix44.IMessage msg)
         {
             lock (_sendMonitor)
             {
@@ -142,10 +179,10 @@ namespace iFix.Crust.Fix44
                     try
                     {
                         session = GetSession(session);
-                        if (session == null) return false;
+                        if (session == null) return null;
                         try
                         {
-                            session.Send(msg);
+                            return new DurableSeqNum { SessionID = session.ID, SeqNum = session.Send(msg) };
                         }
                         finally
                         {
@@ -197,7 +234,7 @@ namespace iFix.Crust.Fix44
                     if (_cancellation.IsCancellationRequested) return null;
                     try
                     {
-                        _session = new Session(_connector.CreateConnection(_cancellation.Token).Result);
+                        _session = new Session(_connector.CreateConnection(_cancellation.Token).Result, ++_sessionID);
                         _session.IncRef();
                         return _session;
                     }

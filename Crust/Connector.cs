@@ -14,7 +14,8 @@ namespace iFix.Crust
 
         // Concurrent calls to Send() from multiple threads are not allowed.
         // If it throws, the connection can no longer be used and shall be disposed of.
-        void Send(Mantle.Fix44.IMessage msg);
+        // Returns SeqNum of the sent message.
+        long Send(Mantle.Fix44.IMessage msg);
 
         // At most one inflight task may exist at a time. In other words,
         // concurrent reads are not allowed.

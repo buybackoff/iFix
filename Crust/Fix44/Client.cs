@@ -34,7 +34,7 @@ namespace iFix.Crust.Fix44
     {
         public Order Order;
         public Object Key;
-        public long RefSeqNum;
+        public DurableSeqNum RefSeqNum;
         public string ClOrdID;
         public OrderStatus TargetStatus;
     }
@@ -69,11 +69,13 @@ namespace iFix.Crust.Fix44
         OrderState _state;
         readonly List<OrderOp> _inflightOps = new List<OrderOp>();
         readonly string _origClOrdID;
+        readonly Action<OrderStateChangeEvent> _onChange;
 
-        public Order(OrderState state, string origClOrdID)
+        public Order(OrderState state, string origClOrdID, Action<OrderStateChangeEvent> onChange)
         {
             _state = state;
             _origClOrdID = origClOrdID;
+            _onChange = onChange;
         }
 
         public OrderStatus TargetStatus
@@ -134,6 +136,7 @@ namespace iFix.Crust.Fix44
 
         // ClOrdID of the New Order Request.
         public string OrigClOrdID { get { return _origClOrdID; } }
+        public Action<OrderStateChangeEvent> OnChange { get { return _onChange; } }
 
         static OrderState NewState(OrderState old, OrderReport report)
         {
@@ -160,114 +163,191 @@ namespace iFix.Crust.Fix44
 
     class OrderHeap
     {
-        Dictionary<long, OrderOp> _opsBySeqNum = new Dictionary<long, OrderOp>();
+        Dictionary<DurableSeqNum, OrderOp> _opsBySeqNum = new Dictionary<DurableSeqNum, OrderOp>();
         Dictionary<string, OrderOp> _opsByOrdID = new Dictionary<string, OrderOp>();
         Dictionary<string, Order> _ordersByOrigOrdID = new Dictionary<string, Order>();
-        Object _monitor = new Object();
 
-        public void AddOrder(Order order)
+        public void Add(Order order, OrderOp op)
         {
-            lock (_monitor)
+            _ordersByOrigOrdID[order.OrigClOrdID] = order;
+            _opsBySeqNum[op.RefSeqNum] = op;
+            _opsByOrdID[op.ClOrdID] = op;
+        }
+
+        public void Match(DurableSeqNum refSeqNum, string clOrdID, string origClOrdID, out OrderOp op, out Order order)
+        {
+            // Any request is finished when we receive Reject with the matching RefSeqNum or
+            // Execution Report with the matching ClOrdID.
+            // Additionally, Cancel is done when we receive Order Cancel Reject with the
+            // matching ClOrdID.
+            //
+            // An Execution Report matches an order if:
+            // 1. ClOrdID is equal to the ClOrdID of the message that created the order.
+            // 2. OrigClOrdID is equal to the ClOrdID of the message that created the order.
+            op = null;
+            order = null;
+
+            if (refSeqNum != null && _opsBySeqNum.TryGetValue(refSeqNum, out op) ||
+                clOrdID != null && _opsByOrdID.TryGetValue(clOrdID, out op))
             {
-                _ordersByOrigOrdID[order.OrigClOrdID] = order;
+                order = op.Order;
+            }
+            else if (origClOrdID != null)
+            {
+                _ordersByOrigOrdID.TryGetValue(origClOrdID, out order);
             }
         }
 
-        public void OnSent(Order order, OrderOp op)
+        public void Finish(OrderOp op, Order order)
         {
-            lock (_monitor)
+            if (op != null)
             {
-                order.OnSent(op);
-                _opsBySeqNum[op.RefSeqNum] = op;
-                _opsByOrdID[op.ClOrdID] = op;
+                _opsByOrdID.Remove(op.ClOrdID);
+                _opsBySeqNum.Remove(op.RefSeqNum);
             }
-        }
-
-        public OrderStateChangeEvent OnReceived(long? refSeqNum, string clOrdID, string origClOrdID,
-                                                RequestStatus requestStatus, OrderReport orderReport)
-        {
-            lock (_monitor)
-            {
-                // Any request is finished when we receive Reject with the matching RefSeqNum or
-                // Execution Report with the matching ClOrdID.
-                // Additionally, Cancel is done when we receive Order Cancel Reject with the
-                // matching ClOrdID.
-                //
-                // An Execution Report matches an order if:
-                // 1. ClOrdID is equal to the ClOrdID of the message that created the order.
-                // 2. OrigClOrdID is equal to the ClOrdID of the message that created the order.
-                OrderOp op = null;
-                Order order = null;
-                if (refSeqNum.HasValue && _opsBySeqNum.TryGetValue(refSeqNum.Value, out op) ||
-                    clOrdID != null && _opsByOrdID.TryGetValue(clOrdID, out op))
-                {
-                    order = op.Order;
-                }
-                else if (origClOrdID != null)
-                {
-                    _ordersByOrigOrdID.TryGetValue(origClOrdID, out order);
-                }
-                if (order == null) return null;
-                OrderStateChangeEvent res = order.OnReceived(op, requestStatus, orderReport);
-                if (op != null)
-                {
-                    _opsBySeqNum.Remove(op.RefSeqNum);
-                    _opsByOrdID.Remove(op.ClOrdID);
-                }
-                if (order.Done())
-                    _ordersByOrigOrdID.Remove(order.OrigClOrdID);
-                return res;
-            }
+            if (order != null && order.Done()) _ordersByOrigOrdID.Remove(order.OrigClOrdID);
         }
     }
 
-    class OrderCtrl : IOrderCtrl
+    static class ClOrdIDGenerator
     {
-        DurableConnection _connection;
-        Order _order;
-        OrderHeap _orderHeap;
+        static readonly string _prefix = SessionID() + "-";
+        static readonly Object _monitor = new Object();
+        static long _last = 0;
 
-        public bool Submit(Object requestKey)
+        public static string GenerateID()
         {
-            // _orderHeap.OnSent(_order, );
-            return false;}
-
-        // Attempts to cancel an order.
-        public bool Cancel(Object requestKey)
-        {
-            return false;
+            lock (_monitor)
+            {
+                return _prefix + (++_last).ToString();
+            }
         }
 
-        // Attempts to replace an order.
-        //
-        // Only limit orders without fills can be cancelled.
-        public bool Replace(Object requestKey, decimal quantity, decimal price)
+        static string SessionID()
         {
-            return false;
+            return new TimeSpan(DateTime.Now.Ticks - new DateTime(2014, 1, 1).Ticks).Seconds.ToString();
         }
     }
 
     class Client : IClient
     {
-        ClientConfig _cfg;
-        DurableConnection _connection;
-        OrderHeap _orders = new OrderHeap();
-        Object _ordersMonitor = new Object();
+        readonly ClientConfig _cfg;
+        readonly DurableConnection _connection;
+        readonly OrderHeap _orders = new OrderHeap();
+        readonly Object _monitor = new Object();
+        readonly Task _reciveLoop;
 
         public Client(ClientConfig cfg, IConnector connector)
         {
             _cfg = cfg;
             _connection = new DurableConnection(new InitializingConnector(connector, Logon));
+            new Task(ReceiveLoop).Start();
         }
 
         public IOrderCtrl CreateOrder(NewOrderRequest request, Action<OrderStateChangeEvent> onChange)
         {
-            return null;
+            var state = new OrderState
+            {
+                Status = OrderStatus.Created,
+                LeftQuantity = request.Quantity,
+                Price = request.Price,
+                FilledQuantity = 0,
+            };
+            return new OrderCtrl(this, new Order(state, ClOrdIDGenerator.GenerateID(), onChange), request);
         }
 
         public void Dispose()
         {
             _connection.Dispose();
+            try { _reciveLoop.Wait(); }
+            catch (Exception) { }
+        }
+
+        async void ReceiveLoop()
+        {
+            while (true)
+            {
+                DurableMessage msg = await _connection.Receive();
+                if (msg == null)
+                    return;
+                try
+                {
+                    ((Mantle.Fix44.IServerMessage)msg.Message).Visit(new MessageVisitor(this, msg.SessionID));
+                }
+                catch (Exception)
+                {
+                    // TODO: log.
+                }
+            }
+        }
+
+        class MessageVisitor : Mantle.Fix44.IServerMessageVisitor<Object>
+        {
+            readonly long _sessionID;
+            readonly Client _client;
+
+            public MessageVisitor(Client client, long sessionID)
+            {
+                _sessionID = sessionID;
+                _client = client;
+            }
+
+            public Object Visit(Mantle.Fix44.Logon msg) { return null; }
+            public Object Visit(Mantle.Fix44.Heartbeat msg) { return null; }
+            public Object Visit(Mantle.Fix44.SequenceReset msg) { return null; }
+            public Object Visit(Mantle.Fix44.ResendRequest msg) { return null; }
+            public Object Visit(Mantle.Fix44.OrderMassCancelReport msg) { return null; }
+
+            public Object Visit(Mantle.Fix44.TestRequest msg)
+            {
+                var heartbeat = new Mantle.Fix44.Heartbeat() { StandardHeader = _client.MakeHeader() };
+                heartbeat.TestReqID.Value = msg.TestReqID.Value;
+                _client._connection.Send(heartbeat);
+                return null;
+            }
+
+            public Object Visit(Mantle.Fix44.Reject msg)
+            {
+                if (msg.RefSeqNum.HasValue)
+                {
+                    var seqNum = new DurableSeqNum { SessionID = _sessionID, SeqNum = msg.RefSeqNum.Value };
+                    HandleMessage(seqNum, null, null, RequestStatus.Error, null);
+                }
+                return null;
+            }
+
+            public Object Visit(Mantle.Fix44.OrderCancelReject msg)
+            {
+                if (msg.ClOrdID.HasValue)
+                    HandleMessage(null, msg.ClOrdID.Value, null, RequestStatus.Error, null);
+                return null;
+            }
+
+            public Object Visit(Mantle.Fix44.ExecutionReport msg)
+            {
+                // TODO: implement me.
+                return null;
+            }
+
+            void HandleMessage(DurableSeqNum refSeqNum, string clOrdID, string origClOrdID,
+                               RequestStatus status, OrderReport report)
+            {
+                OrderStateChangeEvent e = null;
+                Action<OrderStateChangeEvent> onChange = null;
+                lock (_client._monitor)
+                {
+                    OrderOp op;
+                    Order order;
+                    _client._orders.Match(refSeqNum, clOrdID, origClOrdID, out op, out order);
+                    if (order != null && op != null)
+                    {
+                        e = order.OnReceived(op, status, report);
+                        onChange = order.OnChange;
+                    }
+                    _client._orders.Finish(op, order);
+                }
+                if (e != null) onChange.Invoke(e);
+            }
         }
 
         void Logon(IConnection session, CancellationToken cancellationToken)
@@ -289,6 +369,73 @@ namespace iFix.Crust.Fix44
             res.TargetCompID.Value = _cfg.TargetCompID;
             res.SendingTime.Value = DateTime.Now;
             return res;
+        }
+
+        bool Submit(Order order, Object requestKey, NewOrderRequest request)
+        {
+            // The lock is solely to avoid receiving a reply before we put the order
+            // in the order heap. It would be nice to put it in the heap before sending
+            // and thus avoid holding the lock while doing the I/O, but it's not an easy
+            // thing to do because we don't have the SeqNum until the message is sent.
+            lock (_monitor)
+            {
+                if (order.TargetStatus != OrderStatus.Created) return false;
+                var msg = new Mantle.Fix44.NewOrderSingle() { StandardHeader = MakeHeader() };
+                msg.ClOrdID.Value = ClOrdIDGenerator.GenerateID();
+                msg.Account.Value = _cfg.Account;
+                msg.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = _cfg.TradingSessionID });
+                msg.Instrument.Symbol.Value = request.Symbol;
+                msg.Side.Value = request.Side == Side.Buy ? '1' : '2';
+                msg.TransactTime.Value = DateTime.Now;
+                msg.OrderQtyData.OrderQty.Value = request.Quantity;
+                msg.OrdType.Value = request.OrderType == OrderType.Market ? '1' : '2';
+                if (request.Price.HasValue)
+                    msg.Price.Value = request.Price.Value;
+
+                DurableSeqNum seqNum = _connection.Send(msg);
+                if (seqNum == null) return false;
+
+                OrderOp op = new OrderOp
+                {
+                    ClOrdID = ClOrdIDGenerator.GenerateID(),
+                    Key = requestKey,
+                    RefSeqNum = seqNum,
+                    Order = order,
+                    TargetStatus = OrderStatus.Accepted,
+                };
+                _orders.Add(order, op);
+                order.OnSent(op);
+                return true;
+            }
+        }
+
+        class OrderCtrl : IOrderCtrl
+        {
+            readonly Client _client;
+            readonly Order _order;
+            readonly NewOrderRequest _request;
+
+            public OrderCtrl(Client client, Order order, NewOrderRequest request)
+            {
+                _client = client;
+                _order = order;
+                _request = request;
+            }
+
+            public bool Submit(Object requestKey)
+            {
+                return _client.Submit(_order, requestKey, _request);
+            }
+
+            public bool Cancel(Object requestKey)
+            {
+                return false;
+            }
+
+            public bool Replace(Object requestKey, decimal quantity, decimal price)
+            {
+                return false;
+            }
         }
     }
 }

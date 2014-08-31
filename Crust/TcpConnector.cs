@@ -24,10 +24,11 @@ namespace iFix.Crust
             _receiver = new Mantle.Receiver(_strm, 1 << 20, protocols);
         }
 
-        public void Send(Mantle.Fix44.IMessage msg)
+        public long Send(Mantle.Fix44.IMessage msg)
         {
             msg.Header.MsgSeqNum.Value = ++_lastSeqNum;
             Mantle.Publisher.Publish(_strm, Mantle.Fix44.Protocol.Value, msg);
+            return _lastSeqNum;
         }
 
         public async Task<Mantle.Fix44.IMessage> Receive(CancellationToken cancellationToken)
