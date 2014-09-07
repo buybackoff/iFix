@@ -21,7 +21,7 @@ namespace iFix.Crust.Fix44
         // to terminate.
         CancellationTokenSource _cancellation = new CancellationTokenSource();
         // When _refCount reaches zero, it's safe to close the connection.
-        CountdownEvent _refCount = new CountdownEvent(0);
+        CountdownEvent _refCount = new CountdownEvent(1);
 
         // The initial reference count is zero.
         public Session(IConnection connection, long id)
@@ -70,6 +70,7 @@ namespace iFix.Crust.Fix44
             lock (_monitor)
             {
                 if (_connection == null) return;  // Already disposed of.
+                _refCount.Signal();
                 _cancellation.Cancel();
                 _refCount.Wait();
                 _connection.Dispose();
@@ -238,10 +239,13 @@ namespace iFix.Crust.Fix44
                         _session.IncRef();
                         return _session;
                     }
-                    catch (Exception)
+                    catch (Exception e)
                     {
                         // TODO: log.
+                        Console.WriteLine("Exeption: {0}", e);
                     }
+                    // Wait for 1 second before trying to reconnect.
+                    Thread.Sleep(1000);
                 }
             }
         }

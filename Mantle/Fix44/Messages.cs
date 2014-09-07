@@ -388,9 +388,11 @@ namespace iFix.Mantle.Fix44
         public ExecType ExecType = new ExecType();
         public OrdStatus OrdStatus = new OrdStatus();
         public OrdRejReason OrdRejReason = new OrdRejReason();
+        public Price Price = new Price();
         public LastQty LastQty = new LastQty();
         public LastPx LastPx = new LastPx();
         public LeavesQty LeavesQty = new LeavesQty();
+        public CumQty CumQty = new CumQty();
         public OrigOrderID OrigOrderID = new OrigOrderID();
         public Text Text = new Text();
         public MDEntryID MDEntryID = new MDEntryID();
@@ -405,9 +407,11 @@ namespace iFix.Mantle.Fix44
             yield return ExecType;
             yield return OrdStatus;
             yield return OrdRejReason;
+            yield return Price;
             yield return LastQty;
             yield return LastPx;
             yield return LeavesQty;
+            yield return CumQty;
             yield return OrigOrderID;
             yield return Text;
             yield return MDEntryID;

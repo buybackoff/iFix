@@ -38,6 +38,7 @@ namespace iFix.Crust
 
         public void Dispose()
         {
+            Console.WriteLine("Disconnecting");
             try { _strm.Close(); }
             catch (Exception) { }
             try { _strm.Dispose(); }

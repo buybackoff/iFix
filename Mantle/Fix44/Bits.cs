@@ -172,6 +172,11 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 151; } }
     }
 
+    public class CumQty : DecimalField
+    {
+        protected override int Tag { get { return 14; } }
+    }
+
     public class OrigOrderID : StringField
     {
         protected override int Tag { get { return 9945; } }

@@ -8,6 +8,53 @@ namespace iFix.Driver
 {
     class Program
     {
+        public static void Main(string[] args)
+        {
+            try
+            {
+                var client = new Crust.Fix44.Client(
+                    new Crust.Fix44.ClientConfig()
+                    {
+                        HeartBtInt = 30,
+                        Password = "7118",
+                        SenderCompID = "MD9019500001",
+                        TargetCompID = "MFIXTradeIDCurr",
+                        Account = "MB9019501190",
+                        TradingSessionID = "CETS",
+                    },
+                    new TcpConnector("194.84.44.1", 9212));
+                var req = new NewOrderRequest()
+                {
+                    Symbol = "USD000UTSTOM",
+                    Side = Side.Sell,
+                    Quantity = 2,
+                    OrderType = OrderType.Limit,
+                    Price = 34.15m,
+                };
+                var order = client.CreateOrder(req, (OrderStateChangeEvent e) =>
+                {
+                    Console.WriteLine("OrderStateChangeEvent: {0}", e);
+                });
+                if (!order.Submit("Submit"))
+                    throw new Exception("Can't send the order");
+                // order.Replace("Replace", 1, 34.05m);
+                order.Cancel("Cancel");
+                while (true) Thread.Sleep(1000);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Caught an exception: {0}", e);
+            }
+        }
+    }
+
+    /*
+     * Example of using iFix.Mantle
+     */
+
+    /*
+    class Program
+    {
         static long _msgSeqNum = 1;
 
         static Mantle.Fix44.StandardHeader MakeHeader()
@@ -48,19 +95,18 @@ namespace iFix.Driver
                     }
                     if (msg is Mantle.Fix44.Logon)
                     {
-                        /*
-                        Console.WriteLine("Sending limit order.");
-                        var order = new Mantle.Fix44.NewOrderSingle() { StandardHeader = MakeHeader() };
-                        order.ClOrdID.Value = "MyOrder3";
-                        order.Account.Value = "MB9019501190";
-                        order.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = "CETS" });
-                        order.Instrument.Symbol.Value = "USD000UTSTOM";
-                        order.Side.Value = '1';  // 1 = Buy, 2 = Sell
-                        order.TransactTime.Value = DateTime.Now;
-                        order.OrderQtyData.OrderQty.Value = 2;
-                        order.OrdType.Value = '2';  // 1 = Market, 2 = Limit
-                        order.Price.Value = 34.1m;
-                        connection.Send(order);*/
+                        // Console.WriteLine("Sending limit order.");
+                        // var order = new Mantle.Fix44.NewOrderSingle() { StandardHeader = MakeHeader() };
+                        // order.ClOrdID.Value = "MyOrder3";
+                        // order.Account.Value = "MB9019501190";
+                        // order.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = "CETS" });
+                        // order.Instrument.Symbol.Value = "USD000UTSTOM";
+                        // order.Side.Value = '1';  // 1 = Buy, 2 = Sell
+                        // order.TransactTime.Value = DateTime.Now;
+                        // order.OrderQtyData.OrderQty.Value = 2;
+                        // order.OrdType.Value = '2';  // 1 = Market, 2 = Limit
+                        // order.Price.Value = 34.1m;
+                        // connection.Send(order);
                         Console.WriteLine("Requesting order status.");
                         var req = new Mantle.Fix44.OrderStatusRequest() { StandardHeader = MakeHeader() };
                         req.ClOrdID.Value = "MyOrder3";
@@ -68,19 +114,19 @@ namespace iFix.Driver
                     }
                     if (msg is Mantle.Fix44.ExecutionReport && ((Mantle.Fix44.ExecutionReport)msg).ExecType.Value == '0')
                     {
-                        /*Console.WriteLine("Replacing limit order.");
-                        var order = new Mantle.Fix44.OrderCancelReplaceRequest() { StandardHeader = MakeHeader() };
-                        order.ClOrdID.Value = "MyOrder4";
-                        order.OrigClOrdID.Value = "MyOrder3";
-                        order.Account.Value = "MB9019501190";
-                        order.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = "CETS" });
-                        order.Instrument.Symbol.Value = "USD000UTSTOM";
-                        order.Side.Value = '1';  // 1 = Buy, 2 = Sell
-                        order.TransactTime.Value = DateTime.Now;
-                        order.OrderQty.Value = 1;
-                        order.OrdType.Value = '2';  // 1 = Market, 2 = Limit
-                        order.Price.Value = 34.15m;
-                        connection.Send(order);*/
+                        // Console.WriteLine("Replacing limit order.");
+                        // var order = new Mantle.Fix44.OrderCancelReplaceRequest() { StandardHeader = MakeHeader() };
+                        // order.ClOrdID.Value = "MyOrder4";
+                        // order.OrigClOrdID.Value = "MyOrder3";
+                        // order.Account.Value = "MB9019501190";
+                        // order.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = "CETS" });
+                        // order.Instrument.Symbol.Value = "USD000UTSTOM";
+                        // order.Side.Value = '1';  // 1 = Buy, 2 = Sell
+                        // order.TransactTime.Value = DateTime.Now;
+                        // order.OrderQty.Value = 1;
+                        // order.OrdType.Value = '2';  // 1 = Market, 2 = Limit
+                        // order.Price.Value = 34.15m;
+                        // connection.Send(order);
                     }
                 }
             }
@@ -89,7 +135,7 @@ namespace iFix.Driver
                 Console.WriteLine("Caught an exception: {0}", e);
             }
         }
-    }
+    }*/
 
     /*
      * Example of using iFix.Core

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Text;
 
 namespace iFix.Crust
 {
@@ -65,6 +66,17 @@ namespace iFix.Crust
 
         // Only limit orders have price.
         public decimal? Price;
+
+        public override string ToString()
+        {
+            var res = new StringBuilder();
+            res.AppendFormat("Status = {0}", Status);
+            res.AppendFormat(", LeftQuantity = {0}", LeftQuantity);
+            res.AppendFormat(", FilledQuantity = {0}", FilledQuantity);
+            if (Price.HasValue)
+                res.AppendFormat(", Price = {0}", Price.Value);
+            return res.ToString();
+        }
     }
 
     // Allows controlling an order on the exchange.
@@ -111,6 +123,15 @@ namespace iFix.Crust
         // Price at which we bought/sold per lot. We paid/got Quantity * Price.
         // The field is present only when the fill price is known.
         public decimal? Price = 2;
+
+        public override string ToString()
+        {
+            var res = new StringBuilder();
+            res.AppendFormat("Quantity = {0}", Quantity);
+            if (Price.HasValue)
+                res.AppendFormat(", Price = {0}", Price.Value);
+            return res.ToString();
+        }
     }
 
     // What happened to our request (Submit, Cancel or Replace) to the exchange?
@@ -145,6 +166,21 @@ namespace iFix.Crust
         // fill.Quantity is always equal to the difference between FilledQuantity
         // in NewState and the previous state of the order.
         public Fill Fill;
+
+        public override string ToString()
+        {
+            var buf = new StringBuilder();
+            if (FinishedRequestKey != null)
+                buf.AppendFormat(", FinishedRequestKey = {0}", FinishedRequestKey);
+            if (FinishedRequestStatus.HasValue)
+                buf.AppendFormat(", FinishedRequestStatus = {0}", FinishedRequestStatus.Value);
+            if (NewState != null)
+                buf.AppendFormat(", NewState = ({0})", NewState);
+            if (Fill != null)
+                buf.AppendFormat(", Fill = ({0})", Fill);
+            String res = buf.ToString();
+            return res.Length > 0 ? res.Substring(2) : res;
+        }
     }
 
     public enum Side

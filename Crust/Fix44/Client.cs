@@ -15,7 +15,7 @@ namespace iFix.Crust.Fix44
         public UnexpectedMessageReceived(string msg) : base(msg) { }
     }
 
-    class ClientConfig
+    public class ClientConfig
     {
         // Logon fields.
         public int HeartBtInt;
@@ -39,17 +39,6 @@ namespace iFix.Crust.Fix44
         public OrderStatus TargetStatus;
     }
 
-    enum ExecType
-    {
-        New,
-        Cancelled,
-        Replace,
-        PendingCancel,
-        Rejected,
-        Trade,
-        Other,
-    }
-
     class OrderReport
     {
         public OrderStatus OrderStatus;
@@ -68,13 +57,15 @@ namespace iFix.Crust.Fix44
     {
         OrderState _state;
         readonly List<OrderOp> _inflightOps = new List<OrderOp>();
-        readonly string _origClOrdID;
+        readonly string _firstClOrdID;
+        string _lastClOrdID;
         readonly Action<OrderStateChangeEvent> _onChange;
 
-        public Order(OrderState state, string origClOrdID, Action<OrderStateChangeEvent> onChange)
+        public Order(OrderState state, string clOrdID, Action<OrderStateChangeEvent> onChange)
         {
             _state = state;
-            _origClOrdID = origClOrdID;
+            _firstClOrdID = clOrdID;
+            _lastClOrdID = clOrdID;
             _onChange = onChange;
         }
 
@@ -82,22 +73,6 @@ namespace iFix.Crust.Fix44
         {
             get { return _inflightOps.Count > 0 ? _inflightOps[_inflightOps.Count - 1].TargetStatus : _state.Status; }
         }
-
-        /*public bool CanSend(OrderOpType op)
-        {
-            OrderStatus expectedStatus =
-                _state.PendingStatus.HasValue ? _state.PendingStatus.Value : _state.Status;
-            switch (op)
-            {
-                case OrderOpType.Submit:
-                    return expectedStatus == OrderStatus.Created;
-                case OrderOpType.Cancel:
-                    return expectedStatus == OrderStatus.Accepted || expectedStatus == OrderStatus.PartiallyFilled;
-                case OrderOpType.Replace:
-                    return _orderType == OrderType.Limit && expectedStatus == OrderStatus.Accepted;
-            }
-            throw new ArgumentOutOfRangeException("op", op, "Unexpected value of OrderOpType");
-        }*/
 
         public void OnSent(OrderOp op)
         {
@@ -121,6 +96,9 @@ namespace iFix.Crust.Fix44
                 _inflightOps.Remove(op);
                 e.FinishedRequestKey = op.Key;
                 e.FinishedRequestStatus = requestStatus;
+                // When Submit() request fails, transition to OrderStatus.Finished.
+                if (requestStatus == RequestStatus.Error && _inflightOps.Count == 0 && _state.Status == OrderStatus.Created)
+                    _state.Status = OrderStatus.Finished;
             }
             return e;
         }
@@ -135,7 +113,10 @@ namespace iFix.Crust.Fix44
         }
 
         // ClOrdID of the New Order Request.
-        public string OrigClOrdID { get { return _origClOrdID; } }
+        public string FirstClOrdID { get { return _firstClOrdID; } }
+        // The currently assigned ClOrdID. Initially it's the same as FirstClOrdID but then
+        // it diverges (e.g., when the order is replaced).
+        public string LastClOrdID { get { return _lastClOrdID; } set { _lastClOrdID = value; } }
         public Action<OrderStateChangeEvent> OnChange { get { return _onChange; } }
 
         static OrderState NewState(OrderState old, OrderReport report)
@@ -155,7 +136,7 @@ namespace iFix.Crust.Fix44
             decimal qty = newState.FilledQuantity - oldState.FilledQuantity;
             if (qty <= 0) return null;
             if (report.FillPrice.HasValue && report.FillQuantity.HasValue && qty == report.FillQuantity.Value)
-                return new Fill() { Price = report.Price.Value, Quantity = qty };
+                return new Fill() { Price = report.FillPrice.Value, Quantity = qty };
             else
                 return new Fill() { Quantity = qty };
         }
@@ -165,11 +146,11 @@ namespace iFix.Crust.Fix44
     {
         Dictionary<DurableSeqNum, OrderOp> _opsBySeqNum = new Dictionary<DurableSeqNum, OrderOp>();
         Dictionary<string, OrderOp> _opsByOrdID = new Dictionary<string, OrderOp>();
-        Dictionary<string, Order> _ordersByOrigOrdID = new Dictionary<string, Order>();
+        Dictionary<string, Order> _ordersByOrdID = new Dictionary<string, Order>();
 
         public void Add(Order order, OrderOp op)
         {
-            _ordersByOrigOrdID[order.OrigClOrdID] = order;
+            _ordersByOrdID[order.FirstClOrdID] = order;
             _opsBySeqNum[op.RefSeqNum] = op;
             _opsByOrdID[op.ClOrdID] = op;
         }
@@ -182,8 +163,8 @@ namespace iFix.Crust.Fix44
             // matching ClOrdID.
             //
             // An Execution Report matches an order if:
-            // 1. ClOrdID is equal to the ClOrdID of the message that created the order.
-            // 2. OrigClOrdID is equal to the ClOrdID of the message that created the order.
+            // 1. ClOrdID is equal to the first or the last ClOrdID of the order.
+            // 2. OrigClOrdID is equal to the first or the last ClOrdID of the order.
             op = null;
             order = null;
 
@@ -192,9 +173,18 @@ namespace iFix.Crust.Fix44
             {
                 order = op.Order;
             }
-            else if (origClOrdID != null)
+            else if (clOrdID != null && _ordersByOrdID.TryGetValue(clOrdID, out order) ||
+                origClOrdID != null && _ordersByOrdID.TryGetValue(origClOrdID, out order))
             {
-                _ordersByOrigOrdID.TryGetValue(origClOrdID, out order);
+            }
+
+            // If the exchange is assigning a new ClOrdID to the order, remember it.
+            if (clOrdID != null && origClOrdID != null && clOrdID != origClOrdID && order != null)
+            {
+                if (order.LastClOrdID != order.FirstClOrdID)
+                    _ordersByOrdID.Remove(order.LastClOrdID);
+                order.LastClOrdID = clOrdID;
+                _ordersByOrdID[order.LastClOrdID] = order;
             }
         }
 
@@ -205,7 +195,11 @@ namespace iFix.Crust.Fix44
                 _opsByOrdID.Remove(op.ClOrdID);
                 _opsBySeqNum.Remove(op.RefSeqNum);
             }
-            if (order != null && order.Done()) _ordersByOrigOrdID.Remove(order.OrigClOrdID);
+            if (order != null && order.Done())
+            {
+                _ordersByOrdID.Remove(order.FirstClOrdID);
+                _ordersByOrdID.Remove(order.LastClOrdID);
+            }
         }
     }
 
@@ -225,11 +219,11 @@ namespace iFix.Crust.Fix44
 
         static string SessionID()
         {
-            return new TimeSpan(DateTime.Now.Ticks - new DateTime(2014, 1, 1).Ticks).Seconds.ToString();
+            return ((long)new TimeSpan(DateTime.Now.Ticks - new DateTime(2014, 1, 1).Ticks).TotalSeconds).ToString();
         }
     }
 
-    class Client : IClient
+    public class Client : IClient
     {
         readonly ClientConfig _cfg;
         readonly DurableConnection _connection;
@@ -241,7 +235,9 @@ namespace iFix.Crust.Fix44
         {
             _cfg = cfg;
             _connection = new DurableConnection(new InitializingConnector(connector, Logon));
-            new Task(ReceiveLoop).Start();
+            _reciveLoop = new Task(ReceiveLoop);
+            _reciveLoop.Start();
+            // TODO: send test request every 30 seconds.
         }
 
         public IOrderCtrl CreateOrder(NewOrderRequest request, Action<OrderStateChangeEvent> onChange)
@@ -325,7 +321,36 @@ namespace iFix.Crust.Fix44
 
             public Object Visit(Mantle.Fix44.ExecutionReport msg)
             {
-                // TODO: implement me.
+                if (!msg.OrdStatus.HasValue) return null;  // TODO: log.
+                RequestStatus reqStatus = RequestStatus.Unknown;
+                if (msg.ExecType.HasValue)
+                    reqStatus = msg.ExecType.Value == '8' ? RequestStatus.Error : RequestStatus.OK;
+                OrderReport report = new OrderReport();
+                switch (msg.OrdStatus.Value)
+                {
+                    case '0': report.OrderStatus = OrderStatus.Accepted; break;
+                    case '1': report.OrderStatus = OrderStatus.PartiallyFilled; break;
+                    case '2': report.OrderStatus = OrderStatus.Finished; break;
+                    case '4': report.OrderStatus = OrderStatus.Finished; break;
+                    case '6': report.OrderStatus = OrderStatus.TearingDown; break;
+                    case '8': report.OrderStatus = OrderStatus.Finished; break;
+                    case '9': report.OrderStatus = OrderStatus.Finished; break;
+                    case 'E': report.OrderStatus = OrderStatus.Accepted; break;
+                    default: return null;  // TODO: log.
+                }
+                if (msg.Price.HasValue && msg.Price.Value > 0)
+                    report.Price = msg.Price.Value;
+                if (msg.LeavesQty.HasValue && msg.OrdStatus.Value != '6')
+                    report.LeavesQuantity = msg.LeavesQty.Value;
+                if (msg.CumQty.HasValue && msg.CumQty.Value > 0)
+                    report.CumFillQuantity = msg.CumQty.Value;
+                if (msg.LastQty.HasValue && msg.LastQty.Value > 0)
+                {
+                    report.FillQuantity = msg.LastQty.Value;
+                    if (msg.LastPx.HasValue && msg.LastPx.Value > 0)
+                        report.FillPrice = msg.LastPx.Value;
+                }
+                HandleMessage(null, msg.ClOrdID.Value, msg.OrigClOrdID.Value, reqStatus, report);
                 return null;
             }
 
@@ -339,7 +364,7 @@ namespace iFix.Crust.Fix44
                     OrderOp op;
                     Order order;
                     _client._orders.Match(refSeqNum, clOrdID, origClOrdID, out op, out order);
-                    if (order != null && op != null)
+                    if (order != null)
                     {
                         e = order.OnReceived(op, status, report);
                         onChange = order.OnChange;
@@ -381,7 +406,7 @@ namespace iFix.Crust.Fix44
             {
                 if (order.TargetStatus != OrderStatus.Created) return false;
                 var msg = new Mantle.Fix44.NewOrderSingle() { StandardHeader = MakeHeader() };
-                msg.ClOrdID.Value = ClOrdIDGenerator.GenerateID();
+                msg.ClOrdID.Value = order.FirstClOrdID;
                 msg.Account.Value = _cfg.Account;
                 msg.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = _cfg.TradingSessionID });
                 msg.Instrument.Symbol.Value = request.Symbol;
@@ -397,7 +422,69 @@ namespace iFix.Crust.Fix44
 
                 OrderOp op = new OrderOp
                 {
-                    ClOrdID = ClOrdIDGenerator.GenerateID(),
+                    ClOrdID = msg.ClOrdID.Value,
+                    Key = requestKey,
+                    RefSeqNum = seqNum,
+                    Order = order,
+                    TargetStatus = OrderStatus.Accepted,
+                };
+                _orders.Add(order, op);
+                order.OnSent(op);
+                return true;
+            }
+        }
+
+        bool Cancel(Order order, Object requestKey, NewOrderRequest request)
+        {
+            lock (_monitor)
+            {
+                if (order.TargetStatus <= OrderStatus.Created || order.TargetStatus >= OrderStatus.TearingDown) return false;
+                var msg = new Mantle.Fix44.OrderCancelRequest() { StandardHeader = MakeHeader() };
+                msg.ClOrdID.Value = ClOrdIDGenerator.GenerateID();
+                msg.OrigClOrdID.Value = order.FirstClOrdID;
+                msg.Side.Value = request.Side == Side.Buy ? '1' : '2';
+                msg.TransactTime.Value = DateTime.Now;
+
+                DurableSeqNum seqNum = _connection.Send(msg);
+                if (seqNum == null) return false;
+
+                OrderOp op = new OrderOp
+                {
+                    ClOrdID = msg.ClOrdID.Value,
+                    Key = requestKey,
+                    RefSeqNum = seqNum,
+                    Order = order,
+                    TargetStatus = OrderStatus.Finished,
+                };
+                _orders.Add(order, op);
+                order.OnSent(op);
+                return true;
+            }
+        }
+
+        bool Replace(Order order, Object requestKey, NewOrderRequest request, decimal quantity, decimal price)
+        {
+            lock (_monitor)
+            {
+                if (order.TargetStatus != OrderStatus.Accepted) return false;
+                var msg = new Mantle.Fix44.OrderCancelReplaceRequest() { StandardHeader = MakeHeader() };
+                msg.ClOrdID.Value = ClOrdIDGenerator.GenerateID();
+                msg.OrigClOrdID.Value = order.FirstClOrdID;
+                msg.Account.Value = _cfg.Account;
+                msg.Instrument.Symbol.Value = request.Symbol;
+                msg.Price.Value = price;
+                msg.OrderQty.Value = quantity;
+                msg.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = _cfg.TradingSessionID });
+                msg.OrdType.Value = request.OrderType == OrderType.Market ? '1' : '2';
+                msg.Side.Value = request.Side == Side.Buy ? '1' : '2';
+                msg.TransactTime.Value = DateTime.Now;
+
+                DurableSeqNum seqNum = _connection.Send(msg);
+                if (seqNum == null) return false;
+
+                OrderOp op = new OrderOp
+                {
+                    ClOrdID = msg.ClOrdID.Value,
                     Key = requestKey,
                     RefSeqNum = seqNum,
                     Order = order,
@@ -429,12 +516,12 @@ namespace iFix.Crust.Fix44
 
             public bool Cancel(Object requestKey)
             {
-                return false;
+                return _client.Cancel(_order, requestKey, _request);
             }
 
             public bool Replace(Object requestKey, decimal quantity, decimal price)
             {
-                return false;
+                return _client.Replace(_order, requestKey, _request, quantity, price);
             }
         }
     }
