@@ -32,8 +32,7 @@ namespace iFix.Crust
             using (var buf = new MemoryStream(1 << 10))
             {
                 Mantle.Publisher.Publish(buf, Mantle.Fix44.Protocol.Value, msg);
-                byte[] bytes = buf.ToArray();
-                _client.Client.Send(bytes);
+                _client.Client.Send(buf.ToArray());
             }
             return _lastSeqNum;
         }
