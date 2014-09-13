@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NLog;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
@@ -115,6 +116,8 @@ namespace iFix.Crust.Fix44
     // A connection with the exchange with automatic reconnects on failures.
     class DurableConnection
     {
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
         readonly IConnector _connector;
         // The current session that we believe to be valid.
         // Access to the reference is protected by _sessionMonitor.
@@ -158,9 +161,9 @@ namespace iFix.Crust.Fix44
                         session.DecRef();
                     }
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
-                    // TODO: log.
+                    _log.Error("Failed to read a message. Will reconnect and retry.", e);
                 }
             }
         }
@@ -190,9 +193,9 @@ namespace iFix.Crust.Fix44
                             session.DecRef();
                         }
                     }
-                    catch (Exception)
+                    catch (Exception e)
                     {
-                        // TODO: log.
+                        _log.Error("Failed to publish a message. Will reconnect and retry.", e);
                     }
                 }
             }
@@ -241,8 +244,7 @@ namespace iFix.Crust.Fix44
                     }
                     catch (Exception e)
                     {
-                        // TODO: log.
-                        Console.WriteLine("Exeption: {0}", e);
+                        _log.Warn("Failed to connect. Will retry in 1s.", e);
                     }
                     // Wait for 1 second before trying to reconnect.
                     Thread.Sleep(1000);

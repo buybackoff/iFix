@@ -1,4 +1,5 @@
 ﻿using iFix.Core;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -17,6 +18,8 @@ namespace iFix.Mantle
 
     public class Receiver
     {
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
         // Input from the exchange.
         Stream _in;
         MessageReader _reader;
@@ -39,7 +42,7 @@ namespace iFix.Mantle
             while (true)
             {
                 var raw = new RawMessage(await _reader.ReadMessage(_in, cancellationToken));
-                Console.WriteLine("IN: {0}", raw);
+                _log.Info("IN: {0}", raw);
                 IEnumerator<Field> fields = raw.GetEnumerator();
                 IMessageFactory factory = GetFactory(fields);
                 IMessage msg = factory.CreateMessage(fields);

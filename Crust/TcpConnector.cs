@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NLog;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
@@ -9,25 +10,31 @@ namespace iFix.Crust
 {
     class TcpConnection : IConnection
     {
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
         readonly TcpClient _client;
-        readonly Stream _strm;
         Mantle.Receiver _receiver;
         long _lastSeqNum = 0;
 
         public TcpConnection(string host, int port)
         {
+            _log.Info("Connecting to {0}:{1}...", host, port);
             _client = new TcpClient(host, port);
-            _strm = _client.GetStream();
             var protocols = new Dictionary<string, Mantle.IMessageFactory>() {
                 { Mantle.Fix44.Protocol.Value, new Mantle.Fix44.MessageFactory() }
             };
-            _receiver = new Mantle.Receiver(_strm, 1 << 20, protocols);
+            _receiver = new Mantle.Receiver(_client.GetStream(), 1 << 20, protocols);
         }
 
         public long Send(Mantle.Fix44.IMessage msg)
         {
             msg.Header.MsgSeqNum.Value = ++_lastSeqNum;
-            Mantle.Publisher.Publish(_strm, Mantle.Fix44.Protocol.Value, msg);
+            using (var buf = new MemoryStream(1 << 10))
+            {
+                Mantle.Publisher.Publish(buf, Mantle.Fix44.Protocol.Value, msg);
+                byte[] bytes = buf.ToArray();
+                _client.Client.Send(bytes);
+            }
             return _lastSeqNum;
         }
 
@@ -38,11 +45,7 @@ namespace iFix.Crust
 
         public void Dispose()
         {
-            Console.WriteLine("Disconnecting");
-            try { _strm.Close(); }
-            catch (Exception) { }
-            try { _strm.Dispose(); }
-            catch (Exception) { }
+            _log.Info("Disconnecting...");
             try { _client.Close(); }
             catch (Exception) { }
             try { ((IDisposable)_client).Dispose(); }

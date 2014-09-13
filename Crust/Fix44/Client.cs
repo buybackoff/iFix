@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NLog;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -225,6 +226,8 @@ namespace iFix.Crust.Fix44
 
     public class Client : IClient
     {
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
         readonly ClientConfig _cfg;
         readonly DurableConnection _connection;
         readonly OrderHeap _orders = new OrderHeap();
@@ -270,15 +273,18 @@ namespace iFix.Crust.Fix44
                 {
                     ((Mantle.Fix44.IServerMessage)msg.Message).Visit(new MessageVisitor(this, msg.SessionID));
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
-                    // TODO: log.
+                    if (_log.IsErrorEnabled)
+                        _log.Error(String.Format("Failed to handle a message received from the exchange: {0}.", msg.Message), e);
                 }
             }
         }
 
         class MessageVisitor : Mantle.Fix44.IServerMessageVisitor<Object>
         {
+            private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
             readonly long _sessionID;
             readonly Client _client;
 
@@ -321,7 +327,11 @@ namespace iFix.Crust.Fix44
 
             public Object Visit(Mantle.Fix44.ExecutionReport msg)
             {
-                if (!msg.OrdStatus.HasValue) return null;  // TODO: log.
+                if (!msg.OrdStatus.HasValue)
+                {
+                    _log.Error("Message unexpectedly missing OrdStatus: {0}", msg);
+                    return null;
+                }
                 RequestStatus reqStatus = RequestStatus.Unknown;
                 if (msg.ExecType.HasValue)
                     reqStatus = msg.ExecType.Value == '8' ? RequestStatus.Error : RequestStatus.OK;
@@ -336,7 +346,9 @@ namespace iFix.Crust.Fix44
                     case '8': report.OrderStatus = OrderStatus.Finished; break;
                     case '9': report.OrderStatus = OrderStatus.Finished; break;
                     case 'E': report.OrderStatus = OrderStatus.Accepted; break;
-                    default: return null;  // TODO: log.
+                    default:
+                        _log.Error("Unexpected OrdStatus: {0}", msg);
+                        return null;
                 }
                 if (msg.Price.HasValue && msg.Price.Value > 0)
                     report.Price = msg.Price.Value;
@@ -411,7 +423,8 @@ namespace iFix.Crust.Fix44
                 msg.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = _cfg.TradingSessionID });
                 msg.Instrument.Symbol.Value = request.Symbol;
                 msg.Side.Value = request.Side == Side.Buy ? '1' : '2';
-                msg.TransactTime.Value = DateTime.Now;
+                // DateTime.Now is expensive.
+                msg.TransactTime.Value = msg.StandardHeader.SendingTime.Value;
                 msg.OrderQtyData.OrderQty.Value = request.Quantity;
                 msg.OrdType.Value = request.OrderType == OrderType.Market ? '1' : '2';
                 if (request.Price.HasValue)
@@ -443,7 +456,8 @@ namespace iFix.Crust.Fix44
                 msg.ClOrdID.Value = ClOrdIDGenerator.GenerateID();
                 msg.OrigClOrdID.Value = order.FirstClOrdID;
                 msg.Side.Value = request.Side == Side.Buy ? '1' : '2';
-                msg.TransactTime.Value = DateTime.Now;
+                // DateTime.Now is expensive.
+                msg.TransactTime.Value = msg.StandardHeader.SendingTime.Value;
 
                 DurableSeqNum seqNum = _connection.Send(msg);
                 if (seqNum == null) return false;

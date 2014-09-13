@@ -10,5 +10,11 @@ namespace iFix.Core
         {
             return Encoding.ASCII.GetString(bytes.Array, bytes.Offset, bytes.Count);
         }
+
+        public static void CopyTo(this ArraySegment<byte> source, byte[] destination, int destinationOffset)
+        {
+            for (int i = 0; i != source.Count; ++i)
+                destination[destinationOffset + i] = source.Array[source.Offset + i];
+        }
     }
 }

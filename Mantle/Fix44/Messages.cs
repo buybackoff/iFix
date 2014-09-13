@@ -1,6 +1,7 @@
 ﻿using iFix.Core;
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 // This file defines a subset of messages supported by FIX 4.4.
 
@@ -34,6 +35,17 @@ namespace iFix.Mantle.Fix44
         public StandardHeader StandardHeader = new StandardHeader();
         public string Protocol { get { return Fix44.Protocol.Value; } }
         public StandardHeader Header { get { return StandardHeader; } }
+
+        public override string ToString()
+        {
+            var res = new StringBuilder();
+            foreach (Field field in Fields)
+            {
+                res.Append(field);
+                res.Append((char)1);
+            }
+            return res.ToString();
+        }
     }
 
     // FIX server can use this interface to handle all types of messages

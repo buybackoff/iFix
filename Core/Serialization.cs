@@ -1,6 +1,8 @@
-﻿using System;
+﻿using NLog;
+using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 
 namespace iFix.Core
 {
@@ -8,10 +10,13 @@ namespace iFix.Core
     // serialization of IEnumerable<Field> into Stream.
     public static class Serialization
     {
-        // ChecksumTable[checksum] contains serialized value of the checksum.
-        // For example, ChecksumTable[42] is "042".
-        // ChecksumTable.Length is 256.
-        static readonly ArraySegment<byte>[] ChecksumTable = SerializeNumbers(256, 3);
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
+        // ThreeDigitTable[n] contains serialized value of n, padded with leading zeros
+        // if it has less than three.
+        // For example, ThreeDigitTable[42] is "042".
+        static readonly ArraySegment<byte>[] ThreeDigitTable = SerializeNumbers(1000, 3);
+        static readonly ArraySegment<byte>[] TwoDigitTable = SerializeNumbers(100, 2);
         // Precomputed serialized values for integers in [0, 10000).
         // For example, IntTable[42] is "42".
         static readonly ArraySegment<byte>[] IntTable = SerializeNumbers(10000, 0);
@@ -65,7 +70,27 @@ namespace iFix.Core
 
         public static ArraySegment<byte> SerializeTimestamp(DateTime value)
         {
-            return SerializeString(value.ToString("yyyyMMdd-HH:mm:ss.fff"));
+            var year = IntTable[value.Year];
+            var month = TwoDigitTable[value.Month];
+            var day = TwoDigitTable[value.Day];
+            var hour = TwoDigitTable[value.Hour];
+            var minute = TwoDigitTable[value.Minute];
+            var second = TwoDigitTable[value.Second];
+            var millisecond = ThreeDigitTable[value.Millisecond];
+            // yyyyMMdd-HH:mm:ss.fff
+            byte[] res = new byte[21];
+            year.CopyTo(res, 0);
+            month.CopyTo(res, 4);
+            day.CopyTo(res, 6);
+            res[8] = (byte)'-';
+            hour.CopyTo(res, 9);
+            res[11] = (byte)':';
+            minute.CopyTo(res, 12);
+            res[14] = (byte)':';
+            second.CopyTo(res, 15);
+            res[17] = (byte)'.';
+            millisecond.CopyTo(res, 18);
+            return new ArraySegment<byte>(res);
         }
 
         // Version is the value of the BeginString<8> tag (e.g., "FIX.4.4").
@@ -74,23 +99,31 @@ namespace iFix.Core
         // consistent values. Does not flush the stream.
         public static void WriteMessage(Stream strm, ArraySegment<byte> version, IEnumerable<Field> fields)
         {
-            int bodyLength = 0;
-            foreach (Field field in fields)
-                bodyLength += field.Tag.Count + 1 + field.Value.Count + 1;
-            byte checksum = 0;
-            Console.Write("OUT: ");
-            WriteField(strm, new Field(VersionTag, version), ref checksum);
-            WriteField(strm, new Field(BodyLengthTag, SerializeInt(bodyLength)), ref checksum);
-            foreach (Field field in fields)
-                WriteField(strm, field, ref checksum);
-            WriteField(strm, new Field(CheckSumTag, ChecksumTable[checksum]), ref checksum);
-            Console.WriteLine();
+            StringBuilder log = _log.IsInfoEnabled ? new StringBuilder("OUT: ") : null;
+            using (var buf = new MemoryStream(1 << 10))
+            {
+                byte checksum = 0;
+                foreach (Field field in fields)
+                    WriteField(buf, field, ref checksum, null);
+                byte[] payload = buf.ToArray();
+                WriteField(strm, new Field(VersionTag, version), ref checksum, log);
+                WriteField(strm, new Field(BodyLengthTag, SerializeInt(payload.Length)), ref checksum, log);
+                strm.Write(payload, 0, payload.Length);
+                if (log != null)
+                    log.Append(new ArraySegment<byte>(payload).AsAscii());
+                WriteField(strm, new Field(CheckSumTag, ThreeDigitTable[checksum]), ref checksum, log);
+            }
+            if (log != null)
+                _log.Info(log.ToString());
         }
 
-        static void WriteField(Stream strm, Field field, ref byte checksum)
+        static void WriteField(Stream strm, Field field, ref byte checksum, StringBuilder log)
         {
-            Console.Write(field);
-            Console.Write((char)Delimiters.FieldDelimiter);
+            if (log != null)
+            {
+                log.Append(field);
+                log.Append((char)Delimiters.FieldDelimiter);
+            }
             WriteBytes(strm, field.Tag, ref checksum);
             WriteByte(strm, Delimiters.TagValueSeparator, ref checksum);
             WriteBytes(strm, field.Value, ref checksum);

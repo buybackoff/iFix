@@ -3,11 +3,14 @@ using iFix.Mantle;
 using iFix.Crust;
 using System.Collections.Generic;
 using System.Threading;
+using NLog;
 
 namespace iFix.Driver
 {
     class Program
     {
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
         public static void Main(string[] args)
         {
             try
@@ -22,28 +25,36 @@ namespace iFix.Driver
                         Account = "MB9019501190",
                         TradingSessionID = "CETS",
                     },
+                    /*new TcpConnector("127.0.0.1", 5001)*/
                     new TcpConnector("194.84.44.1", 9212));
-                var req = new NewOrderRequest()
+                DateTime start = new DateTime();
+                for (int i = 0; i != 1001; ++i)
                 {
-                    Symbol = "USD000UTSTOM",
-                    Side = Side.Sell,
-                    Quantity = 2,
-                    OrderType = OrderType.Limit,
-                    Price = 34.15m,
-                };
-                var order = client.CreateOrder(req, (OrderStateChangeEvent e) =>
-                {
-                    Console.WriteLine("OrderStateChangeEvent: {0}", e);
-                });
-                if (!order.Submit("Submit"))
-                    throw new Exception("Can't send the order");
-                // order.Replace("Replace", 1, 34.05m);
-                order.Cancel("Cancel");
-                while (true) Thread.Sleep(1000);
+                    if (i == 1)
+                        start = DateTime.Now;
+                    var req = new NewOrderRequest()
+                    {
+                        Symbol = "USD000UTSTOM",
+                        Side = Side.Buy,
+                        Quantity = 1,
+                        OrderType = OrderType.Limit,
+                        Price = 34.00m,
+                    };
+                    var order = client.CreateOrder(req, (OrderStateChangeEvent e) =>
+                    {
+                        _log.Info("OrderStateChangeEvent: {0}", e);
+                    });
+                    if (!order.Submit("Submit"))
+                        throw new Exception("Can't send the order");
+                    // order.Replace("Replace", 1, 34.05m);
+                    order.Cancel("Cancel");
+                }
+                DateTime end = DateTime.Now;
+                Console.WriteLine(end - start);
             }
             catch (Exception e)
             {
-                Console.WriteLine("Caught an exception: {0}", e);
+                _log.Fatal("Unexpected exception. Terminating.", e);
             }
         }
     }
