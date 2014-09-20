@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>$id$</id>
+    <version>$version$</version>
+    <title>$title$</title>
+    <authors>Roman Perepelitsa</authors>
+    <owners>Roman Perepelitsa</owners>
+    <licenseUrl>http://www.apache.org/licenses/LICENSE-2.0.txt</licenseUrl>
+    <projectUrl>https://github.com/romkatv/iFix</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>$description$</description>
+    <releaseNotes>First release.</releaseNotes>
+    <copyright>Copyright 2014</copyright>
+    <tags>FIX</tags>
+  </metadata>
+</package>
