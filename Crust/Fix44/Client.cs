@@ -29,6 +29,10 @@ namespace iFix.Crust.Fix44
         // Fields for posting, changing and cancelling orders.
         public string Account;
         public string TradingSessionID;
+
+        // If not null, all ClOrdID in all outgoing messages
+        // will have this prefix.
+        public string ClOrdIDPrefix;
     }
 
     class OrderOp
@@ -204,13 +208,20 @@ namespace iFix.Crust.Fix44
         }
     }
 
-    static class ClOrdIDGenerator
+    class ClOrdIDGenerator
     {
-        static readonly string _prefix = SessionID() + "-";
-        static readonly Object _monitor = new Object();
-        static long _last = 0;
+        readonly string _prefix;
+        readonly Object _monitor = new Object();
+        long _last = 0;
 
-        public static string GenerateID()
+        public ClOrdIDGenerator(string prefix)
+        {
+            _prefix = prefix == null ? "" : prefix + "-";
+            _prefix += SessionID();
+            _prefix += "-";
+        }
+
+        public string GenerateID()
         {
             lock (_monitor)
             {
@@ -230,6 +241,7 @@ namespace iFix.Crust.Fix44
 
         readonly ClientConfig _cfg;
         readonly DurableConnection _connection;
+        readonly ClOrdIDGenerator _clOrdIDGenerator;
         readonly OrderHeap _orders = new OrderHeap();
         readonly Object _monitor = new Object();
         readonly Task _reciveLoop;
@@ -238,6 +250,7 @@ namespace iFix.Crust.Fix44
         {
             _cfg = cfg;
             _connection = new DurableConnection(new InitializingConnector(connector, Logon));
+            _clOrdIDGenerator = new ClOrdIDGenerator(cfg.ClOrdIDPrefix);
             _reciveLoop = new Task(ReceiveLoop);
             _reciveLoop.Start();
             // TODO: send test request every 30 seconds.
@@ -252,7 +265,7 @@ namespace iFix.Crust.Fix44
                 Price = request.Price,
                 FilledQuantity = 0,
             };
-            return new OrderCtrl(this, new Order(state, ClOrdIDGenerator.GenerateID(), onChange), request);
+            return new OrderCtrl(this, new Order(state, _clOrdIDGenerator.GenerateID(), onChange), request);
         }
 
         public void Dispose()
@@ -453,7 +466,7 @@ namespace iFix.Crust.Fix44
             {
                 if (order.TargetStatus <= OrderStatus.Created || order.TargetStatus >= OrderStatus.TearingDown) return false;
                 var msg = new Mantle.Fix44.OrderCancelRequest() { StandardHeader = MakeHeader() };
-                msg.ClOrdID.Value = ClOrdIDGenerator.GenerateID();
+                msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
                 msg.OrigClOrdID.Value = order.FirstClOrdID;
                 msg.Side.Value = request.Side == Side.Buy ? '1' : '2';
                 // DateTime.Now is expensive.
@@ -482,7 +495,7 @@ namespace iFix.Crust.Fix44
             {
                 if (order.TargetStatus != OrderStatus.Accepted) return false;
                 var msg = new Mantle.Fix44.OrderCancelReplaceRequest() { StandardHeader = MakeHeader() };
-                msg.ClOrdID.Value = ClOrdIDGenerator.GenerateID();
+                msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
                 msg.OrigClOrdID.Value = order.FirstClOrdID;
                 msg.Account.Value = _cfg.Account;
                 msg.Instrument.Symbol.Value = request.Symbol;

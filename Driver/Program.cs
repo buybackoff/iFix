@@ -24,33 +24,27 @@ namespace iFix.Driver
                         TargetCompID = "MFIXTradeIDCurr",
                         Account = "MB9019501190",
                         TradingSessionID = "CETS",
+                        ClOrdIDPrefix = "MyTest",
                     },
                     /*new TcpConnector("127.0.0.1", 5001)*/
                     new TcpConnector("194.84.44.1", 9212));
-                DateTime start = new DateTime();
-                for (int i = 0; i != 1001; ++i)
+                var req = new NewOrderRequest()
                 {
-                    if (i == 1)
-                        start = DateTime.Now;
-                    var req = new NewOrderRequest()
-                    {
-                        Symbol = "USD000UTSTOM",
-                        Side = Side.Buy,
-                        Quantity = 1,
-                        OrderType = OrderType.Limit,
-                        Price = 34.00m,
-                    };
-                    var order = client.CreateOrder(req, (OrderStateChangeEvent e) =>
-                    {
-                        _log.Info("OrderStateChangeEvent: {0}", e);
-                    });
-                    if (!order.Submit("Submit"))
-                        throw new Exception("Can't send the order");
-                    // order.Replace("Replace", 1, 34.05m);
-                    order.Cancel("Cancel");
-                }
-                DateTime end = DateTime.Now;
-                Console.WriteLine(end - start);
+                    Symbol = "USD000UTSTOM",
+                    Side = Side.Buy,
+                    Quantity = 1,
+                    OrderType = OrderType.Market,
+                    // Price = 34.00m,
+                };
+                var order = client.CreateOrder(req, (OrderStateChangeEvent e) =>
+                {
+                    _log.Info("OrderStateChangeEvent: {0}", e);
+                });
+                if (!order.Submit("Submit"))
+                    throw new Exception("Can't send the order");
+                // order.Replace("Replace", 1, 34.05m);
+                // order.Cancel("Cancel");
+                while (true) Thread.Sleep(1000);
             }
             catch (Exception e)
             {
