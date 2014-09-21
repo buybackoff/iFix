@@ -417,7 +417,7 @@ namespace iFix.Crust.Fix44
             var res = new Mantle.Fix44.StandardHeader();
             res.SenderCompID.Value = _cfg.SenderCompID;
             res.TargetCompID.Value = _cfg.TargetCompID;
-            res.SendingTime.Value = DateTime.Now;
+            res.SendingTime.Value = DateTime.UtcNow;
             return res;
         }
 
@@ -436,7 +436,6 @@ namespace iFix.Crust.Fix44
                 msg.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = _cfg.TradingSessionID });
                 msg.Instrument.Symbol.Value = request.Symbol;
                 msg.Side.Value = request.Side == Side.Buy ? '1' : '2';
-                // DateTime.Now is expensive.
                 msg.TransactTime.Value = msg.StandardHeader.SendingTime.Value;
                 msg.OrderQtyData.OrderQty.Value = request.Quantity;
                 msg.OrdType.Value = request.OrderType == OrderType.Market ? '1' : '2';
@@ -469,7 +468,6 @@ namespace iFix.Crust.Fix44
                 msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
                 msg.OrigClOrdID.Value = order.FirstClOrdID;
                 msg.Side.Value = request.Side == Side.Buy ? '1' : '2';
-                // DateTime.Now is expensive.
                 msg.TransactTime.Value = msg.StandardHeader.SendingTime.Value;
 
                 DurableSeqNum seqNum = _connection.Send(msg);
@@ -504,7 +502,7 @@ namespace iFix.Crust.Fix44
                 msg.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = _cfg.TradingSessionID });
                 msg.OrdType.Value = request.OrderType == OrderType.Market ? '1' : '2';
                 msg.Side.Value = request.Side == Side.Buy ? '1' : '2';
-                msg.TransactTime.Value = DateTime.Now;
+                msg.TransactTime.Value = msg.StandardHeader.SendingTime.Value;
 
                 DurableSeqNum seqNum = _connection.Send(msg);
                 if (seqNum == null) return false;
