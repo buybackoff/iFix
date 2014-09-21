@@ -99,14 +99,14 @@ namespace iFix.Core
 
         // Finds the specified byte in the byte array and returns its index.
         // Throws if the byte can't be found.
-        static int Find(byte needle, byte[] haysack, int offset, int end)
+        static int Find(byte needle, byte[] haystack, int offset, int end)
         {
             for (int i = offset; i != end; ++i)
-                if (haysack[i] == needle)
+                if (haystack[i] == needle)
                     return i;
             throw new MalformedMessageException(String.Format(
                 "Expected {0} in {1}", (char)needle,
-                new ArraySegment<byte>(haysack, offset, end - offset).AsAscii()));
+                new ArraySegment<byte>(haystack, offset, end - offset).AsAscii()));
         }
     }
 
