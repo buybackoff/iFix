@@ -394,39 +394,29 @@ namespace iFix.Mantle.Fix44
     public class ExecutionReport : Message, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "8" };
-        public OrderID OrderID = new OrderID();
         public ClOrdID ClOrdID = new ClOrdID();
         public OrigClOrdID OrigClOrdID = new OrigClOrdID();
         public ExecType ExecType = new ExecType();
         public OrdStatus OrdStatus = new OrdStatus();
-        public OrdRejReason OrdRejReason = new OrdRejReason();
         public Price Price = new Price();
         public LastQty LastQty = new LastQty();
         public LastPx LastPx = new LastPx();
         public LeavesQty LeavesQty = new LeavesQty();
         public CumQty CumQty = new CumQty();
-        public OrigOrderID OrigOrderID = new OrigOrderID();
-        public Text Text = new Text();
-        public MDEntryID MDEntryID = new MDEntryID();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
             yield return MsgType;
             yield return StandardHeader;
-            yield return OrderID;
             yield return ClOrdID;
             yield return OrigClOrdID;
             yield return ExecType;
             yield return OrdStatus;
-            yield return OrdRejReason;
             yield return Price;
             yield return LastQty;
             yield return LastPx;
             yield return LeavesQty;
             yield return CumQty;
-            yield return OrigOrderID;
-            yield return Text;
-            yield return MDEntryID;
         }
 
         public T Visit<T>(IServerMessageVisitor<T> visitor)
