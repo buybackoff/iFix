@@ -29,19 +29,41 @@ namespace iFix.Crust.Fix44
         // Fields for posting, changing and cancelling orders.
         public string Account;
         public string TradingSessionID;
+        // If null, PartyIDSource and PartyRole are ignored.
+        public string PartyID;
+        public char PartyIDSource;
+        public int PartyRole;
 
         // If not null, all ClOrdID in all outgoing messages
         // will have this prefix.
         public string ClOrdIDPrefix;
+
+        // If the exhange hasn't replied anything to our request for
+        // this long, assume that it's not going to reply ever.
+        // Zero means no timeout.
+        //
+        // Recommended value: 60.
+        public double RequestTimeoutSeconds;
+
+        // If there was no activity for an order for this many seconds,
+        // request explicit status update from the exchange to ensure we
+        // are on the same page. Zero means no explicit status requests.
+        //
+        // WARNING: THIS DOESN'T WORK YET. DO NOT SET.
+        public double OrderStatusSyncPeriod;
     }
 
     class OrderOp
     {
         public Order Order;
+        // Key as it was passed to the corresponding method of IOrderCtrl.
         public Object Key;
         public DurableSeqNum RefSeqNum;
         public string ClOrdID;
+        // What status do we expect the order to assume if the request succeeds.
         public OrderStatus TargetStatus;
+        // Time when the request was sent to the exchange.
+        public DateTime SendTime;
     }
 
     class OrderReport
@@ -60,11 +82,19 @@ namespace iFix.Crust.Fix44
 
     class Order
     {
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
         OrderState _state;
         readonly List<OrderOp> _inflightOps = new List<OrderOp>();
         readonly string _firstClOrdID;
         string _lastClOrdID;
         readonly Action<OrderStateChangeEvent> _onChange;
+        // The last time when we either received status for this order from the exchange
+        // or sent any requests for it.
+        //
+        // Initialized to MaxValue so that we don't request status of this order
+        // from the exchange until we send the first request for it.
+        DateTime _lastActivityTime = DateTime.MaxValue;
 
         public Order(OrderState state, string clOrdID, Action<OrderStateChangeEvent> onChange)
         {
@@ -81,7 +111,15 @@ namespace iFix.Crust.Fix44
 
         public void OnSent(OrderOp op)
         {
-            _inflightOps.Add(op);
+            if (op != null)
+            {
+                _inflightOps.Add(op);
+                _lastActivityTime = op.SendTime;
+            }
+            else
+            {
+                _lastActivityTime = DateTime.UtcNow;
+            }
         }
 
         // The op is not null if it's a reply to one of our requests.
@@ -89,6 +127,11 @@ namespace iFix.Crust.Fix44
         // OrderReport may be null. This happens, for example, when we get Reject<3> to our request.
         public OrderStateChangeEvent OnReceived(OrderOp op, RequestStatus requestStatus, OrderReport report)
         {
+            if (op != null && requestStatus == RequestStatus.Unknown)
+                _log.Warn("FIX request with ClOrdID '{0}' for order '{1}' timed out", op.ClOrdID, LastClOrdID);
+            if (op != null && requestStatus == RequestStatus.Error)
+                _log.Warn("FIX request with ClOrdID '{0}' for order '{1}' failed", op.ClOrdID, LastClOrdID);
+
             OrderState oldState = _state;
             _state = NewState(oldState, report);
             OrderStateChangeEvent e = new OrderStateChangeEvent()
@@ -102,9 +145,11 @@ namespace iFix.Crust.Fix44
                 e.FinishedRequestKey = op.Key;
                 e.FinishedRequestStatus = requestStatus;
                 // When Submit() request fails, transition to OrderStatus.Finished.
-                if (requestStatus == RequestStatus.Error && _inflightOps.Count == 0 && _state.Status == OrderStatus.Created)
+                if (requestStatus == RequestStatus.Error && _state.Status == OrderStatus.Created)
                     _state.Status = OrderStatus.Finished;
             }
+            if (report != null)
+                _lastActivityTime = DateTime.UtcNow;
             return e;
         }
 
@@ -123,6 +168,13 @@ namespace iFix.Crust.Fix44
         // it diverges (e.g., when the order is replaced).
         public string LastClOrdID { get { return _lastClOrdID; } set { _lastClOrdID = value; } }
         public Action<OrderStateChangeEvent> OnChange { get { return _onChange; } }
+        public DateTime LastActivityTime
+        {
+            get
+            {
+                return _state.Status == OrderStatus.Finished ? DateTime.MaxValue : _lastActivityTime;
+            }
+        }
 
         static OrderState NewState(OrderState old, OrderReport report)
         {
@@ -152,12 +204,16 @@ namespace iFix.Crust.Fix44
         Dictionary<DurableSeqNum, OrderOp> _opsBySeqNum = new Dictionary<DurableSeqNum, OrderOp>();
         Dictionary<string, OrderOp> _opsByOrdID = new Dictionary<string, OrderOp>();
         Dictionary<string, Order> _ordersByOrdID = new Dictionary<string, Order>();
+        SortedPropertyDictionary<Order, DateTime> _ordersByLastActivityTime = new SortedPropertyDictionary<Order, DateTime>();
+        SortedPropertyDictionary<OrderOp, DateTime> _opsBySendTime = new SortedPropertyDictionary<OrderOp, DateTime>();
 
         public void Add(Order order, OrderOp op)
         {
             _ordersByOrdID[order.FirstClOrdID] = order;
             _opsBySeqNum[op.RefSeqNum] = op;
             _opsByOrdID[op.ClOrdID] = op;
+            _ordersByLastActivityTime.Update(order, order.LastActivityTime);
+            _opsBySendTime.Add(op, op.SendTime);
         }
 
         public void Match(DurableSeqNum refSeqNum, string clOrdID, string origClOrdID, out OrderOp op, out Order order)
@@ -199,12 +255,42 @@ namespace iFix.Crust.Fix44
             {
                 _opsByOrdID.Remove(op.ClOrdID);
                 _opsBySeqNum.Remove(op.RefSeqNum);
+                _opsBySendTime.Remove(op);
             }
-            if (order != null && order.Done())
+            if (order != null)
             {
-                _ordersByOrdID.Remove(order.FirstClOrdID);
-                _ordersByOrdID.Remove(order.LastClOrdID);
+                if (order.Done())
+                {
+                    _ordersByOrdID.Remove(order.FirstClOrdID);
+                    _ordersByOrdID.Remove(order.LastClOrdID);
+                    _ordersByLastActivityTime.Remove(order);
+                }
+                else
+                {
+                    _ordersByLastActivityTime.Update(order, order.LastActivityTime);
+                }
             }
+        }
+
+        // Returns the order for which the last activity was receives the most
+        // amount of time ago, or null if there are no orders.
+        public Order MostQuietOrder()
+        {
+            if (_ordersByLastActivityTime.Count == 0) return null;
+            Order order;
+            DateTime time;
+            _ordersByLastActivityTime.SmallestProperty(out order, out time);
+            return order;
+        }
+
+        // Returns the oldest op, or null if there are no ops.
+        public OrderOp OldestOp()
+        {
+            if (_opsBySendTime.Count == 0) return null;
+            OrderOp op;
+            DateTime time;
+            _opsBySendTime.SmallestProperty(out op, out time);
+            return op;
         }
     }
 
@@ -231,7 +317,8 @@ namespace iFix.Crust.Fix44
 
         static string SessionID()
         {
-            return ((long)new TimeSpan(DateTime.Now.Ticks - new DateTime(2014, 1, 1).Ticks).TotalSeconds).ToString();
+            var t = DateTime.UtcNow;
+            return (t.Hour * 3600 + t.Minute * 60 + t.Second).ToString();
         }
     }
 
@@ -245,6 +332,8 @@ namespace iFix.Crust.Fix44
         readonly OrderHeap _orders = new OrderHeap();
         readonly Object _monitor = new Object();
         readonly Task _reciveLoop;
+        readonly Task _syncLoop;
+        volatile bool _stopping = false;
 
         public Client(ClientConfig cfg, IConnector connector)
         {
@@ -253,6 +342,8 @@ namespace iFix.Crust.Fix44
             _clOrdIDGenerator = new ClOrdIDGenerator(cfg.ClOrdIDPrefix);
             _reciveLoop = new Task(ReceiveLoop);
             _reciveLoop.Start();
+            _syncLoop = new Task(SyncLoop);
+            _syncLoop.Start();
             // TODO: send test request every 30 seconds.
         }
 
@@ -270,7 +361,10 @@ namespace iFix.Crust.Fix44
 
         public void Dispose()
         {
+            _stopping = true;
             _connection.Dispose();
+            try { _syncLoop.Wait(); }
+            catch (Exception) { }
             try { _reciveLoop.Wait(); }
             catch (Exception) { }
         }
@@ -292,6 +386,64 @@ namespace iFix.Crust.Fix44
                         _log.Error(String.Format("Failed to handle a message received from the exchange: {0}.", msg.Message), e);
                 }
             }
+        }
+
+        async void SyncLoop()
+        {
+            for (; !_stopping; await Task.Delay(1000))  // 1 second sleep at the end
+            {
+                try
+                {
+                    DateTime now = DateTime.UtcNow;
+                    if (_cfg.RequestTimeoutSeconds > 0)
+                        while (TryExpireOp(now)) { }
+                    if (_cfg.OrderStatusSyncPeriod > 0)
+                        while (TryRequestOrderStatus(now)) { }
+                }
+                catch (Exception e)
+                {
+                    _log.Error("Unexpected exception", e);
+                }
+            }
+        }
+
+        bool TryExpireOp(DateTime now)
+        {
+            OrderStateChangeEvent e = null;
+            Action<OrderStateChangeEvent> onChange = null;
+            lock (_monitor)
+            {
+                OrderOp op = _orders.OldestOp();
+                if (op == null || (now - op.SendTime).TotalSeconds < _cfg.RequestTimeoutSeconds)
+                    return false;
+                e = op.Order.OnReceived(op, RequestStatus.Unknown, null);
+                onChange = op.Order.OnChange;
+                _orders.Finish(op, op.Order);
+            }
+            try
+            {
+                if (onChange != null) onChange.Invoke(e);
+            }
+            catch (Exception ex)
+            {
+                _log.Warn("Event handler failed", ex);
+            }
+            return true;
+        }
+
+        bool TryRequestOrderStatus(DateTime now)
+        {
+            lock (_monitor)
+            {
+                Order order = _orders.MostQuietOrder();
+                if (order == null || (now - order.LastActivityTime).TotalSeconds < _cfg.OrderStatusSyncPeriod)
+                    return false;
+                var msg = new Mantle.Fix44.OrderStatusRequest() { StandardHeader = MakeHeader() };
+                msg.ClOrdID.Value = order.LastClOrdID;
+                _connection.Send(msg);
+                order.OnSent(null);
+            }
+            return true;
         }
 
         class MessageVisitor : Mantle.Fix44.IServerMessageVisitor<Object>
@@ -347,7 +499,12 @@ namespace iFix.Crust.Fix44
                 }
                 RequestStatus reqStatus = RequestStatus.Unknown;
                 if (msg.ExecType.HasValue)
-                    reqStatus = msg.ExecType.Value == '8' ? RequestStatus.Error : RequestStatus.OK;
+                {
+                    if (msg.ExecType.Value == '8')
+                        reqStatus = RequestStatus.Error;
+                    else if (msg.ExecType.Value != 'I')
+                        reqStatus = RequestStatus.OK;
+                }
                 OrderReport report = new OrderReport();
                 switch (msg.OrdStatus.Value)
                 {
@@ -389,6 +546,8 @@ namespace iFix.Crust.Fix44
                     OrderOp op;
                     Order order;
                     _client._orders.Match(refSeqNum, clOrdID, origClOrdID, out op, out order);
+                    if (status == RequestStatus.Unknown)
+                        op = null;
                     if (order != null)
                     {
                         e = order.OnReceived(op, status, report);
@@ -396,7 +555,7 @@ namespace iFix.Crust.Fix44
                     }
                     _client._orders.Finish(op, order);
                 }
-                if (e != null) onChange.Invoke(e);
+                if (onChange != null) onChange.Invoke(e);
             }
         }
 
@@ -433,6 +592,14 @@ namespace iFix.Crust.Fix44
                 var msg = new Mantle.Fix44.NewOrderSingle() { StandardHeader = MakeHeader() };
                 msg.ClOrdID.Value = order.FirstClOrdID;
                 msg.Account.Value = _cfg.Account;
+                if (_cfg.PartyID != null)
+                {
+                    var party = new Mantle.Fix44.Party();
+                    party.PartyID.Value = _cfg.PartyID;
+                    party.PartyIDSource.Value = _cfg.PartyIDSource;
+                    party.PartyRole.Value = _cfg.PartyRole;
+                    msg.PartyGroup.Add(party);
+                }
                 msg.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = _cfg.TradingSessionID });
                 msg.Instrument.Symbol.Value = request.Symbol;
                 msg.Side.Value = request.Side == Side.Buy ? '1' : '2';
@@ -452,6 +619,7 @@ namespace iFix.Crust.Fix44
                     RefSeqNum = seqNum,
                     Order = order,
                     TargetStatus = OrderStatus.Accepted,
+                    SendTime = DateTime.UtcNow,
                 };
                 _orders.Add(order, op);
                 order.OnSent(op);
@@ -480,6 +648,7 @@ namespace iFix.Crust.Fix44
                     RefSeqNum = seqNum,
                     Order = order,
                     TargetStatus = OrderStatus.Finished,
+                    SendTime = DateTime.UtcNow,
                 };
                 _orders.Add(order, op);
                 order.OnSent(op);
@@ -496,6 +665,14 @@ namespace iFix.Crust.Fix44
                 msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
                 msg.OrigClOrdID.Value = order.FirstClOrdID;
                 msg.Account.Value = _cfg.Account;
+                if (_cfg.PartyID != null)
+                {
+                    var party = new Mantle.Fix44.Party();
+                    party.PartyID.Value = _cfg.PartyID;
+                    party.PartyIDSource.Value = _cfg.PartyIDSource;
+                    party.PartyRole.Value = _cfg.PartyRole;
+                    msg.PartyGroup.Add(party);
+                }
                 msg.Instrument.Symbol.Value = request.Symbol;
                 msg.Price.Value = price;
                 msg.OrderQty.Value = quantity;
@@ -514,6 +691,7 @@ namespace iFix.Crust.Fix44
                     RefSeqNum = seqNum,
                     Order = order,
                     TargetStatus = OrderStatus.Accepted,
+                    SendTime = DateTime.UtcNow,
                 };
                 _orders.Add(order, op);
                 order.OnSent(op);

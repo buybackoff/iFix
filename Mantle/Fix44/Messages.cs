@@ -296,6 +296,7 @@ namespace iFix.Mantle.Fix44
     {
         public static readonly MsgType MsgType = new MsgType { Value = "D" };
         public ClOrdID ClOrdID = new ClOrdID();
+        public PartyGroup PartyGroup = new PartyGroup();
         public Account Account = new Account();
         public TradingSessionIDGroup TradingSessionIDGroup = new TradingSessionIDGroup();
         public Instrument Instrument = new Instrument();
@@ -310,6 +311,7 @@ namespace iFix.Mantle.Fix44
             yield return MsgType;
             yield return StandardHeader;
             yield return ClOrdID;
+            yield return PartyGroup;
             yield return Account;
             yield return TradingSessionIDGroup;
             yield return Instrument;
@@ -358,6 +360,7 @@ namespace iFix.Mantle.Fix44
         public ClOrdID ClOrdID = new ClOrdID();
         public OrigClOrdID OrigClOrdID = new OrigClOrdID();
         public Account Account = new Account();
+        public PartyGroup PartyGroup = new PartyGroup();
         public Instrument Instrument = new Instrument();
         public Price Price = new Price();
         public OrderQty OrderQty = new OrderQty();
@@ -374,6 +377,7 @@ namespace iFix.Mantle.Fix44
             yield return ClOrdID;
             yield return OrigClOrdID;
             yield return Account;
+            yield return PartyGroup;
             yield return Instrument;
             yield return Price;
             yield return OrderQty;
@@ -499,12 +503,14 @@ namespace iFix.Mantle.Fix44
     {
         public static readonly MsgType MsgType = new MsgType { Value = "H" };
         public ClOrdID ClOrdID = new ClOrdID();
+        public OrderID OrderID = new OrderID();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
             yield return MsgType;
             yield return StandardHeader;
             yield return ClOrdID;
+            yield return OrderID;
         }
 
         public T Visit<T>(IClientMessageVisitor<T> visitor)

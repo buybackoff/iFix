@@ -25,6 +25,8 @@ namespace iFix.Driver
                         Account = "MB9019501190",
                         TradingSessionID = "CETS",
                         ClOrdIDPrefix = "MyTest",
+                        RequestTimeoutSeconds = 0,
+                        OrderStatusSyncPeriod = 3,
                     },
                     /*new TcpConnector("127.0.0.1", 5001)*/
                     new TcpConnector("194.84.44.1", 9212));
@@ -33,8 +35,8 @@ namespace iFix.Driver
                     Symbol = "USD000UTSTOM",
                     Side = Side.Buy,
                     Quantity = 1,
-                    OrderType = OrderType.Market,
-                    // Price = 34.00m,
+                    OrderType = OrderType.Limit,
+                    Price = 36.08m,
                 };
                 var order = client.CreateOrder(req, (OrderStateChangeEvent e) =>
                 {

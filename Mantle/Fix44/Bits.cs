@@ -202,6 +202,21 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 531; } }
     }
 
+    public class PartyID : StringField
+    {
+        protected override int Tag { get { return 448; } }
+    }
+
+    public class PartyIDSource : CharField
+    {
+        protected override int Tag { get { return 447; } }
+    }
+
+    public class PartyRole : IntField
+    {
+        protected override int Tag { get { return 452; } }
+    }
+
     // Component blocks: http://www.onixs.biz/fix-dictionary/4.4/#ComponentBlocks.
 
     // BeginString, BodyLength and MsgType are intentionally missing.
@@ -243,10 +258,29 @@ namespace iFix.Mantle.Fix44
         }
     }
 
+    public class Party : FieldSet
+    {
+        public PartyID PartyID = new PartyID();
+        public PartyIDSource PartyIDSource = new PartyIDSource();
+        public PartyRole PartyRole = new PartyRole();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return PartyID;
+            yield return PartyIDSource;
+            yield return PartyRole;
+        }
+    }
+
     // Groups: http://fixwiki.org/fixwiki/FPL:Tag_Value_Syntax#Repeating_Groups.
 
     public class TradingSessionIDGroup : FieldGroup<TradingSessionID>
     {
         protected override int GroupSizeTag { get { return 386; } }
+    }
+
+    public class PartyGroup : FieldGroup<Party>
+    {
+        protected override int GroupSizeTag { get { return 453; } }
     }
 }
