@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Text;
 
 namespace iFix.Core
 {
@@ -36,7 +37,7 @@ namespace iFix.Core
 
         public override string ToString()
         {
-            return _serialized.AsAscii();
+            return Encoding.UTF8.GetString(_serialized.Array, _serialized.Offset, _serialized.Count);
         }
     }
 }
