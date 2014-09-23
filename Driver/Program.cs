@@ -20,11 +20,11 @@ namespace iFix.Driver
                     {
                         HeartBtInt = 30,
                         Password = "7118",
-                        SenderCompID = "MD9019500001",
+                        SenderCompID = "MD9019500002",
                         TargetCompID = "MFIXTradeIDCurr",
                         Account = "MB9019501190",
                         TradingSessionID = "CETS",
-                        ClOrdIDPrefix = "MyTest",
+                        ClOrdIDPrefix = "BP14466/01#",
                         RequestTimeoutSeconds = 0,
                         OrderStatusSyncPeriod = 3,
                     },
