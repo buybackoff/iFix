@@ -10,6 +10,8 @@ namespace iFix.Core
     // fields in order.
     public class RawMessage : IEnumerable<Field>
     {
+        static Encoding _russianEncoding = Encoding.GetEncoding(1251);
+
         // Serialized FIX message.
         readonly ArraySegment<byte> _serialized;
 
@@ -37,7 +39,7 @@ namespace iFix.Core
 
         public override string ToString()
         {
-            return Encoding.UTF8.GetString(_serialized.Array, _serialized.Offset, _serialized.Count);
+            return _russianEncoding.GetString(_serialized.Array, _serialized.Offset, _serialized.Count);
         }
     }
 }
