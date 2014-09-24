@@ -64,6 +64,7 @@ namespace iFix.Crust.Fix44
         public OrderStatus TargetStatus;
         // Time when the request was sent to the exchange.
         public DateTime SendTime;
+        public bool InvalidatesOrderID;
     }
 
     class OrderReport
@@ -168,6 +169,15 @@ namespace iFix.Crust.Fix44
         // it diverges (e.g., when the order is replaced).
         public string LastClOrdID { get { return _lastClOrdID; } set { _lastClOrdID = value; } }
         public Action<OrderStateChangeEvent> OnChange { get { return _onChange; } }
+        public bool PendingNewID
+        {
+            get
+            {
+                foreach (OrderOp op in _inflightOps)
+                    if (op.InvalidatesOrderID) return true;
+                return false;
+            }
+        }
         public DateTime LastActivityTime
         {
             get
@@ -209,7 +219,7 @@ namespace iFix.Crust.Fix44
 
         public void Add(Order order, OrderOp op)
         {
-            _ordersByOrdID[order.FirstClOrdID] = order;
+            _ordersByOrdID[order.LastClOrdID] = order;
             _opsBySeqNum[op.RefSeqNum] = op;
             _opsByOrdID[op.ClOrdID] = op;
             _ordersByLastActivityTime.Update(order, order.LastActivityTime);
@@ -242,7 +252,7 @@ namespace iFix.Crust.Fix44
             // If the exchange is assigning a new ClOrdID to the order, remember it.
             if (clOrdID != null && origClOrdID != null && clOrdID != origClOrdID && order != null)
             {
-                if (order.LastClOrdID != order.FirstClOrdID)
+                if (order.LastClOrdID != clOrdID)
                     _ordersByOrdID.Remove(order.LastClOrdID);
                 order.LastClOrdID = clOrdID;
                 _ordersByOrdID[order.LastClOrdID] = order;
@@ -261,7 +271,6 @@ namespace iFix.Crust.Fix44
             {
                 if (order.Done())
                 {
-                    _ordersByOrdID.Remove(order.FirstClOrdID);
                     _ordersByOrdID.Remove(order.LastClOrdID);
                     _ordersByLastActivityTime.Remove(order);
                 }
@@ -615,7 +624,7 @@ namespace iFix.Crust.Fix44
             {
                 if (order.TargetStatus != OrderStatus.Created) return false;
                 var msg = new Mantle.Fix44.NewOrderSingle() { StandardHeader = MakeHeader() };
-                msg.ClOrdID.Value = order.FirstClOrdID;
+                msg.ClOrdID.Value = order.LastClOrdID;
                 msg.Account.Value = _cfg.Account;
                 if (_cfg.PartyID != null)
                 {
@@ -645,6 +654,7 @@ namespace iFix.Crust.Fix44
                     Order = order,
                     TargetStatus = OrderStatus.Accepted,
                     SendTime = DateTime.UtcNow,
+                    InvalidatesOrderID = false,
                 };
                 _orders.Add(order, op);
                 order.OnSent(op);
@@ -656,10 +666,11 @@ namespace iFix.Crust.Fix44
         {
             lock (_monitor)
             {
+                if (order.PendingNewID) return false;
                 if (order.TargetStatus <= OrderStatus.Created || order.TargetStatus >= OrderStatus.TearingDown) return false;
                 var msg = new Mantle.Fix44.OrderCancelRequest() { StandardHeader = MakeHeader() };
                 msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
-                msg.OrigClOrdID.Value = order.FirstClOrdID;
+                msg.OrigClOrdID.Value = order.LastClOrdID;
                 msg.Side.Value = request.Side == Side.Buy ? '1' : '2';
                 msg.TransactTime.Value = msg.StandardHeader.SendingTime.Value;
 
@@ -674,6 +685,7 @@ namespace iFix.Crust.Fix44
                     Order = order,
                     TargetStatus = OrderStatus.Finished,
                     SendTime = DateTime.UtcNow,
+                    InvalidatesOrderID = false,
                 };
                 _orders.Add(order, op);
                 order.OnSent(op);
@@ -685,11 +697,13 @@ namespace iFix.Crust.Fix44
         {
             lock (_monitor)
             {
+                if (order.PendingNewID) return false;
                 if (order.TargetStatus != OrderStatus.Accepted) return false;
                 var msg = new Mantle.Fix44.OrderCancelReplaceRequest() { StandardHeader = MakeHeader() };
                 msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
-                msg.OrigClOrdID.Value = order.FirstClOrdID;
+                msg.OrigClOrdID.Value = order.LastClOrdID;
                 msg.Account.Value = _cfg.Account;
+                /*
                 if (_cfg.PartyID != null)
                 {
                     var party = new Mantle.Fix44.Party();
@@ -697,7 +711,7 @@ namespace iFix.Crust.Fix44
                     party.PartyIDSource.Value = _cfg.PartyIDSource;
                     party.PartyRole.Value = _cfg.PartyRole;
                     msg.PartyGroup.Add(party);
-                }
+                }*/
                 msg.Instrument.Symbol.Value = request.Symbol;
                 msg.Price.Value = price;
                 msg.OrderQty.Value = quantity;
@@ -717,6 +731,7 @@ namespace iFix.Crust.Fix44
                     Order = order,
                     TargetStatus = OrderStatus.Accepted,
                     SendTime = DateTime.UtcNow,
+                    InvalidatesOrderID = true,
                 };
                 _orders.Add(order, op);
                 order.OnSent(op);
