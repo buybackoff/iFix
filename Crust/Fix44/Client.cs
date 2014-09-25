@@ -34,6 +34,11 @@ namespace iFix.Crust.Fix44
         public char PartyIDSource;
         public int PartyRole;
 
+        // If false, the Party* fields defined above are used
+        // only when submitting orders. If true, they are also
+        // used when replacing orders.
+        public bool SetPartyWhenReplacing;
+
         // If not null, all ClOrdID in all outgoing messages
         // will have this prefix.
         public string ClOrdIDPrefix;
@@ -703,15 +708,14 @@ namespace iFix.Crust.Fix44
                 msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
                 msg.OrigClOrdID.Value = order.LastClOrdID;
                 msg.Account.Value = _cfg.Account;
-                /*
-                if (_cfg.PartyID != null)
+                if (_cfg.SetPartyWhenReplacing && _cfg.PartyID != null)
                 {
                     var party = new Mantle.Fix44.Party();
                     party.PartyID.Value = _cfg.PartyID;
                     party.PartyIDSource.Value = _cfg.PartyIDSource;
                     party.PartyRole.Value = _cfg.PartyRole;
                     msg.PartyGroup.Add(party);
-                }*/
+                }
                 msg.Instrument.Symbol.Value = request.Symbol;
                 msg.Price.Value = price;
                 msg.OrderQty.Value = quantity;
