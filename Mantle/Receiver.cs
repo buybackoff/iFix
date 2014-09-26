@@ -42,7 +42,6 @@ namespace iFix.Mantle
             while (true)
             {
                 var raw = new RawMessage(await _reader.ReadMessage(_in, cancellationToken));
-                _log.Info("IN: {0}", raw);
                 IEnumerator<Field> fields = raw.GetEnumerator();
                 IMessageFactory factory = GetFactory(fields);
                 IMessage msg = factory.CreateMessage(fields);

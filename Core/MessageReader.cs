@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NLog;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -8,17 +9,25 @@ using System.Threading.Tasks;
 namespace iFix.Core
 {
     // Trying to read a FIX message that is above the maximum supported size.
-    public class MessageTooLargeException : Exception { }
+    public class MessageTooLargeException : Exception
+    {
+        public MessageTooLargeException(string msg) : base(msg) { }
+    }
 
     // Trying to read a FIX message from an empty stream. This exception is
     // usually thrown when reading from a closed socket.
-    public class EmptyStreamException : Exception { }
+    public class EmptyStreamException : Exception
+    {
+        public EmptyStreamException(string msg) : base(msg) { }
+    }
 
     // Low level class for chunking of byte streams into FIX messages.
     // Messages are separated by SOH (ASCII 01), followed by "10=", any number
     // of bytes, and then SOH again.
     public class MessageReader
     {
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
         // _buf contains data received from the stream but not yet consumed.
         // Bytes at [_startPos, _endPos) form an unfinished message; they'll be used in
         // the next call to ReadMessage(). Bytes before that contain the last message returned
@@ -59,12 +68,16 @@ namespace iFix.Core
                 // TODO: NetworkStream doesn't really support cancellation. Figure out how to cancel.
                 int read = await strm.ReadAsync(_buf, _endPos, _buf.Length - _endPos, cancellationToken);
                 if (read <= 0)
-                    throw new EmptyStreamException();
+                {
+                    var partial = new ArraySegment<byte>(_buf, _startPos, _endPos - _startPos);
+                    throw new EmptyStreamException("Read so far: " + partial.AsAscii());
+                }
                 messageEnd = trailerMatcher.FindTrailer(_buf, _endPos, _endPos + read);
                 _endPos += read;
             }
             var res = new ArraySegment<byte>(_buf, _startPos, messageEnd - _startPos);
             _startPos = messageEnd;
+            _log.Info("IN: {0}", res.AsAscii());
             return res;
         }
 
@@ -75,7 +88,10 @@ namespace iFix.Core
             if (_endPos < _buf.Length)
                 return;
             if (_startPos == 0)
-                throw new MessageTooLargeException();  // See constructor's parameter maxMessageSize.
+            {
+                // See constructor's parameter maxMessageSize.
+                throw new MessageTooLargeException("Read so far: " + new ArraySegment<byte>(_buf).AsAscii());
+            }
             for (int i = _startPos; i != _endPos; ++i)
                 _buf[i - _startPos] = _buf[i];
             _startPos = 0;

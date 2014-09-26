@@ -133,10 +133,21 @@ namespace iFix.Crust.Fix44
         // OrderReport may be null. This happens, for example, when we get Reject<3> to our request.
         public OrderStateChangeEvent OnReceived(OrderOp op, RequestStatus requestStatus, OrderReport report)
         {
-            if (op != null && requestStatus == RequestStatus.Unknown)
-                _log.Warn("FIX request with ClOrdID '{0}' for order '{1}' timed out", op.ClOrdID, LastClOrdID);
-            if (op != null && requestStatus == RequestStatus.Error)
-                _log.Warn("FIX request with ClOrdID '{0}' for order '{1}' failed", op.ClOrdID, LastClOrdID);
+            if (op != null)
+            {
+                switch (requestStatus)
+                {
+                    case RequestStatus.Unknown:
+                        _log.Warn("FIX request with ClOrdID '{0}' for order '{1}' timed out", op.ClOrdID, LastClOrdID);
+                        break;
+                    case RequestStatus.Error:
+                        _log.Warn("FIX request with ClOrdID '{0}' for order '{1}' failed", op.ClOrdID, LastClOrdID);
+                        break;
+                    case RequestStatus.OK:
+                        _log.Info("FIX request with ClOrdID '{0}' for order '{1}' succeeded", op.ClOrdID, LastClOrdID);
+                        break;
+                }
+            }
 
             OrderState oldState = _state;
             _state = NewState(oldState, report);
@@ -156,6 +167,7 @@ namespace iFix.Crust.Fix44
             }
             if (report != null)
                 _lastActivityTime = DateTime.UtcNow;
+            _log.Info("Publishing OrderStateChangeEvent: {0}", e);
             return e;
         }
 
