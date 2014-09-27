@@ -684,7 +684,7 @@ namespace iFix.Crust.Fix44
             lock (_monitor)
             {
                 if (order.PendingNewID) return false;
-                if (order.TargetStatus <= OrderStatus.Created || order.TargetStatus >= OrderStatus.TearingDown) return false;
+                if (order.TargetStatus >= OrderStatus.TearingDown) return false;
                 var msg = new Mantle.Fix44.OrderCancelRequest() { StandardHeader = MakeHeader() };
                 msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
                 msg.OrigClOrdID.Value = order.LastClOrdID;
