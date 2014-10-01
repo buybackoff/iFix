@@ -327,5 +327,10 @@ namespace iFix.Crust
         /// It's not allowed to modify 'request' after passing it to CreateOrder().
         /// </summary>
         IOrderCtrl CreateOrder(NewOrderRequest request, Action<OrderStateChangeEvent> onChange);
+
+        /// <summary>
+        /// Cancels all orders.
+        /// </summary>
+        void CancelAllOrders();
     }
 }

@@ -18,44 +18,79 @@ namespace iFix.Crust.Fix44
 
     public class ClientConfig
     {
-        // Logon fields.
+        /// <summary>
+        /// Logon field. Recommended value: 30.
+        /// </summary>
         public int HeartBtInt;
+        /// <summary>
+        /// Logon field.
+        /// </summary>
         public string Password;
 
-        // Common fields for all requests.
+        /// <summary>
+        /// Common field for all requests.
+        /// </summary>
         public string SenderCompID;
+        /// <summary>
+        /// Common field for all requests.
+        /// </summary>
         public string TargetCompID;
 
-        // Fields for posting, changing and cancelling orders.
+        /// <summary>
+        /// Common field for posting, changing and cancelling orders.
+        /// </summary>
         public string Account;
+        /// <summary>
+        /// Common field for posting, changing and cancelling orders.
+        /// </summary>
         public string TradingSessionID;
-        // If null, PartyIDSource and PartyRole are ignored.
+        /// <summary>
+        /// If null, PartyIDSource and PartyRole are ignored.
+        /// </summary>
         public string PartyID;
+        /// <summary>
+        /// Ignored if PartyID is is null.
+        /// </summary>
         public char PartyIDSource;
+        /// <summary>
+        /// Ignored if PartyID is is null.
+        /// </summary>
         public int PartyRole;
 
-        // If false, the Party* fields defined above are used
-        // only when submitting orders. If true, they are also
-        // used when replacing orders.
-        public bool SetPartyWhenReplacing;
-
-        // If not null, all ClOrdID in all outgoing messages
-        // will have this prefix.
+        /// <summary>
+        /// If not null, all ClOrdID in all outgoing messages
+        /// will have this prefix.
+        /// </summary>
         public string ClOrdIDPrefix;
 
-        // If the exhange hasn't replied anything to our request for
-        // this long, assume that it's not going to reply ever.
-        // Zero means no timeout.
-        //
-        // Recommended value: 60.
+        /// <summary>
+        /// If the exhange hasn't replied anything to our request for
+        /// this long, assume that it's not going to reply ever.
+        /// Zero means no timeout.
+        ///
+        /// Recommended value: 60.
+        /// </summary>
         public double RequestTimeoutSeconds;
 
-        // If there was no activity for an order for this many seconds,
-        // request explicit status update from the exchange to ensure we
-        // are on the same page. Zero means no explicit status requests.
-        //
-        // WARNING: THIS DOESN'T WORK YET. DO NOT SET.
+        /// <summary>
+        /// If there was no activity for an order for this many seconds,
+        /// request explicit status update from the exchange to ensure we
+        /// are on the same page. Zero means no explicit status requests.
+        ///
+        /// WARNING: THIS DOESN'T WORK YET. DO NOT SET.
+        /// </summary>
         public double OrderStatusSyncPeriod;
+
+        /// <summary>
+        /// If true, the client will attempt to cancel all orders immediately
+        /// after establishing a connection with the exchange. All orders will
+        /// be marked as finished after RequestTimeoutSeconds from the moment the
+        /// request is sent, or sooner if the exchange notifies us about changes
+        /// to the orders.
+        ///
+        /// WARNING: NOT YET TESTED. DO NOT SET.
+        /// </summary>
+        public bool CancelAllOrdersOnConnect;
     }
 
     class OrderOp
@@ -69,6 +104,7 @@ namespace iFix.Crust.Fix44
         public OrderStatus TargetStatus;
         // Time when the request was sent to the exchange.
         public DateTime SendTime;
+        // We expect the exchange to assign a new ID to the order upon receiving this op.
         public bool InvalidatesOrderID;
     }
 
@@ -385,6 +421,8 @@ namespace iFix.Crust.Fix44
         readonly Task _reciveLoop;
         readonly Task _syncLoop;
         volatile bool _stopping = false;
+        volatile Object _cancelAllTime = DateTime.MinValue;
+        readonly Object _onChangeMonitor = new Object();
 
         public Client(ClientConfig cfg, IConnector connector)
         {
@@ -408,6 +446,15 @@ namespace iFix.Crust.Fix44
                 FilledQuantity = 0,
             };
             return new OrderCtrl(this, new Order(state, _clOrdIDGenerator.GenerateID(), onChange), request);
+        }
+
+        public void CancelAllOrders()
+        {
+            var msg = new Mantle.Fix44.OrderMassCancelRequest() { StandardHeader = MakeHeader() };
+            msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
+            msg.Account.Value = _cfg.Account;
+            msg.TransactTime.Value = msg.StandardHeader.SendingTime.Value;
+            _connection.Send(msg);
         }
 
         public void Dispose()
@@ -450,6 +497,8 @@ namespace iFix.Crust.Fix44
                         while (TryExpireOp(now)) { }
                     if (_cfg.OrderStatusSyncPeriod > 0)
                         while (TryRequestOrderStatus(now)) { }
+                    if (_cfg.CancelAllOrdersOnConnect && _cfg.RequestTimeoutSeconds > 0)
+                        while (TryExpireCancelledOrders(now)) { }
                 }
                 catch (Exception e)
                 {
@@ -473,7 +522,10 @@ namespace iFix.Crust.Fix44
             }
             try
             {
-                if (onChange != null) onChange.Invoke(e);
+                if (onChange != null)
+                {
+                    lock (_onChangeMonitor) { onChange.Invoke(e); }
+                }
             }
             catch (Exception ex)
             {
@@ -493,6 +545,38 @@ namespace iFix.Crust.Fix44
                 msg.ClOrdID.Value = order.LastClOrdID;
                 _connection.Send(msg);
                 order.OnSent(null);
+            }
+            return true;
+        }
+
+        bool TryExpireCancelledOrders(DateTime now)
+        {
+            if ((now - (DateTime)_cancelAllTime).TotalSeconds < _cfg.RequestTimeoutSeconds) return false;
+            OrderStateChangeEvent e = null;
+            Action<OrderStateChangeEvent> onChange = null;
+            lock (_monitor)
+            {
+                Order order = _orders.MostQuietOrder();
+                if (order == null || order.TargetStatus == OrderStatus.Finished ||
+                    order.LastActivityTime >= (DateTime)_cancelAllTime)
+                {
+                    return false;
+                }
+                e = order.OnReceived(null, RequestStatus.Unknown,
+                                     new OrderReport() { OrderStatus = OrderStatus.Finished });
+                onChange = order.OnChange;
+                _orders.Finish(null, order);
+            }
+            try
+            {
+                if (onChange != null)
+                {
+                    lock (_onChangeMonitor) { onChange.Invoke(e); }
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.Warn("Event handler failed", ex);
             }
             return true;
         }
@@ -606,7 +690,10 @@ namespace iFix.Crust.Fix44
                     }
                     _client._orders.Finish(op, order);
                 }
-                if (onChange != null) onChange.Invoke(e);
+                if (onChange != null)
+                {
+                    lock (_client._onChangeMonitor) { onChange.Invoke(e); }
+                }
             }
         }
 
@@ -620,6 +707,15 @@ namespace iFix.Crust.Fix44
             session.Send(logon);
             if (!(session.Receive(cancellationToken).Result is Mantle.Fix44.Logon))
                 throw new UnexpectedMessageReceived("Expected Logon");
+            if (_cfg.CancelAllOrdersOnConnect)
+            {
+                var msg = new Mantle.Fix44.OrderMassCancelRequest() { StandardHeader = MakeHeader() };
+                msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
+                msg.Account.Value = _cfg.Account;
+                msg.TransactTime.Value = msg.StandardHeader.SendingTime.Value;
+                session.Send(msg);
+                _cancelAllTime = DateTime.UtcNow;
+            }
         }
 
         Mantle.Fix44.StandardHeader MakeHeader()
@@ -684,7 +780,13 @@ namespace iFix.Crust.Fix44
             lock (_monitor)
             {
                 if (order.PendingNewID) return false;
-                if (order.TargetStatus >= OrderStatus.TearingDown) return false;
+                if (order.TargetStatus == OrderStatus.Finished) return false;
+                if (order.TargetStatus == OrderStatus.TearingDown) {
+                    if (_cfg.RequestTimeoutSeconds <= 0)
+                        return false;
+                    if ((DateTime.UtcNow - order.LastActivityTime).TotalSeconds < _cfg.RequestTimeoutSeconds)
+                        return false;
+                }
                 var msg = new Mantle.Fix44.OrderCancelRequest() { StandardHeader = MakeHeader() };
                 msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
                 msg.OrigClOrdID.Value = order.LastClOrdID;
@@ -720,7 +822,7 @@ namespace iFix.Crust.Fix44
                 msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
                 msg.OrigClOrdID.Value = order.LastClOrdID;
                 msg.Account.Value = _cfg.Account;
-                if (_cfg.SetPartyWhenReplacing && _cfg.PartyID != null)
+                if (_cfg.PartyID != null)
                 {
                     var party = new Mantle.Fix44.Party();
                     party.PartyID.Value = _cfg.PartyID;
