@@ -94,6 +94,7 @@ namespace iFix.Core
             }
             for (int i = _startPos; i != _endPos; ++i)
                 _buf[i - _startPos] = _buf[i];
+            _endPos -= _startPos;
             _startPos = 0;
         }
     }

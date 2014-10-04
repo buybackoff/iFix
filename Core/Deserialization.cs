@@ -119,7 +119,7 @@ namespace iFix.Core
         readonly static byte[] Trailer = { Delimiters.FieldDelimiter, (byte)'1', (byte)'0', (byte)'=' };
 
         // Number of bytes from the trailer that have been found so far.
-        int numBytesMatched = 0;
+        int _numBytesMatched = 0;
 
         // Searches for trailer in the chunked stream of data. Returns 0 if trailer wasn't
         // found, otherwise returns past the end index of the trailer (that is, index
@@ -132,17 +132,19 @@ namespace iFix.Core
             for (int i = start; i != end; ++i)
             {
                 // If SOH and "10=" have been found, we just need to find the last SOH.
-                if (numBytesMatched == Trailer.Length)
+                if (_numBytesMatched == Trailer.Length)
                 {
                     if (bytes[i] == Delimiters.FieldDelimiter)
                         return i + 1;
                 }
                 else
                 {
-                    if (bytes[i] == Trailer[numBytesMatched])
-                        ++numBytesMatched;
+                    if (bytes[i] == Trailer[_numBytesMatched])
+                        ++_numBytesMatched;
+                    else if (bytes[i] == Trailer[0])
+                        _numBytesMatched = 1;
                     else
-                        numBytesMatched = 0;
+                        _numBytesMatched = 0;
                 }
             }
             return 0;
