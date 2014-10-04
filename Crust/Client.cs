@@ -152,13 +152,13 @@ namespace iFix.Crust
         /// trades for 5 and 7 lots, we'll have two separate fills with Quantity = 5
         /// and Quantity = 7.
         /// </summary>
-        public decimal Quantity = 1;
+        public decimal Quantity;
 
         /// <summary>
         /// Price at which we bought/sold per lot. We paid/got Quantity * Price.
         /// The field is present only when the fill price is known.
         /// </summary>
-        public decimal? Price = 2;
+        public decimal? Price;
 
         public override string ToString()
         {
