@@ -434,12 +434,14 @@ namespace iFix.Mantle.Fix44
     {
         public static readonly MsgType MsgType = new MsgType { Value = "9" };
         public ClOrdID ClOrdID = new ClOrdID();
+        public CxlRejReason CxlRejReason = new CxlRejReason();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
             yield return MsgType;
             yield return StandardHeader;
             yield return ClOrdID;
+            yield return CxlRejReason;
         }
 
         public T Visit<T>(IServerMessageVisitor<T> visitor)

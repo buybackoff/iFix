@@ -217,6 +217,11 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 452; } }
     }
 
+    public class CxlRejReason : IntField
+    {
+        protected override int Tag { get { return 102; } }
+    }
+
     // Component blocks: http://www.onixs.biz/fix-dictionary/4.4/#ComponentBlocks.
 
     // BeginString, BodyLength and MsgType are intentionally missing.

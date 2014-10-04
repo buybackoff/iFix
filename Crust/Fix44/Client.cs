@@ -620,8 +620,12 @@ namespace iFix.Crust.Fix44
 
             public Object Visit(Mantle.Fix44.OrderCancelReject msg)
             {
-                if (msg.ClOrdID.HasValue)
-                    HandleMessage(null, msg.ClOrdID.Value, null, RequestStatus.Error, null);
+                if (!msg.ClOrdID.HasValue) return null;
+
+                OrderReport report = null;
+                if (msg.CxlRejReason.HasValue && msg.CxlRejReason.Value == 1)
+                    report = new OrderReport { OrderStatus = OrderStatus.Finished };
+                HandleMessage(null, msg.ClOrdID.Value, null, RequestStatus.Error, report);
                 return null;
             }
 
