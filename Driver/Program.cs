@@ -7,6 +7,61 @@ using NLog;
 
 namespace iFix.Driver
 {
+    // Equities.
+    class Program
+    {
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
+        public static void Main(string[] args)
+        {
+            try
+            {
+                var client = new Crust.Fix44.Client(
+                    new Crust.Fix44.ClientConfig()
+                    {
+                        HeartBtInt = 30,
+                        Password = "7118",
+                        SenderCompID = "MU9019500002",
+                        TargetCompID = "MFIXTradeID",
+                        Account = "S01-00000F00",
+                        TradingSessionID = "TQBR",
+                        ClOrdIDPrefix = "BP14466/01#",
+                        // PartyID = "BP14466",
+                        // PartyIDSource = 'D',
+                        // PartyRole = 3,
+                        RequestTimeoutSeconds = 0,
+                        OrderStatusSyncPeriod = 0,
+                    },
+                    new TcpConnector("194.84.44.1", 9120));
+                var req = new NewOrderRequest()
+                {
+                    Symbol = "TGKA",
+                    Side = Side.Buy,
+                    Quantity = 1,
+                    OrderType = OrderType.Limit,
+                    Price = 0.0049m,
+                };
+                var order = client.CreateOrder(req, (OrderStateChangeEvent e) =>
+                {
+                    _log.Info("OrderStateChangeEvent: {0}", e);
+                });
+                if (!order.Submit("Submit"))
+                    throw new Exception("Can't send the order");
+                if (!order.Replace("Replace", 2, 0.0049m))
+                    throw new Exception("Can't replace the order");
+                Thread.Sleep(1000);
+                if (!order.Cancel("Cancel"))
+                    throw new Exception("Can't cancel the order");
+                while (true) Thread.Sleep(1000);
+            }
+            catch (Exception e)
+            {
+                _log.Fatal("Unexpected exception. Terminating.", e);
+            }
+        }
+    }
+    // Currencies.
+    /*
     class Program
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
@@ -25,10 +80,12 @@ namespace iFix.Driver
                         Account = "MB9019501190",
                         TradingSessionID = "CETS",
                         ClOrdIDPrefix = "BP14466/01#",
+                        PartyID = "BP14466",
+                        PartyIDSource = 'D',
+                        PartyRole = 3,
                         RequestTimeoutSeconds = 0,
-                        OrderStatusSyncPeriod = 3,
+                        OrderStatusSyncPeriod = 0,
                     },
-                    /*new TcpConnector("127.0.0.1", 5001)*/
                     new TcpConnector("194.84.44.1", 9212));
                 var req = new NewOrderRequest()
                 {
@@ -36,7 +93,7 @@ namespace iFix.Driver
                     Side = Side.Buy,
                     Quantity = 1,
                     OrderType = OrderType.Limit,
-                    Price = 36.08m,
+                    Price = 36.00m,
                 };
                 var order = client.CreateOrder(req, (OrderStateChangeEvent e) =>
                 {
@@ -44,8 +101,8 @@ namespace iFix.Driver
                 });
                 if (!order.Submit("Submit"))
                     throw new Exception("Can't send the order");
-                // order.Replace("Replace", 1, 34.05m);
-                // order.Cancel("Cancel");
+                if (!order.Replace("Replace", 1, 36.01m))
+                    throw new Exception("Can't send the order");
                 while (true) Thread.Sleep(1000);
             }
             catch (Exception e)
@@ -53,7 +110,7 @@ namespace iFix.Driver
                 _log.Fatal("Unexpected exception. Terminating.", e);
             }
         }
-    }
+    }*/
 
     /*
      * Example of using iFix.Mantle
