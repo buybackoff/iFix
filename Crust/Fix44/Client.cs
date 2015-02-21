@@ -382,7 +382,7 @@ namespace iFix.Crust.Fix44
             var t = DateTime.UtcNow;
             // The session ID is time of the startup measured in the number
             // of second since midnight. If two instances of the app
-            // are launched within a second or less of each other, the'll
+            // are launched within a second or less of each other, they'll
             // have the same ID.
             uint sec = (uint)(t.Hour * 3600 + t.Minute * 60 + t.Second);
             // Note that sec has no more than 18 bits set. It's actually even less
@@ -689,6 +689,29 @@ namespace iFix.Crust.Fix44
                         op = null;
                     if (order != null)
                     {
+                        if (op == null && status == RequestStatus.OK &&
+                            report.OrderStatus == OrderStatus.Finished &&
+                            order.TargetStatus != OrderStatus.TearingDown &&
+                            order.TargetStatus != OrderStatus.Finished)
+                        {
+                            // Occasionally MOEX sends unsolicited erroneous execution reports that say
+                            // the order has been cancelled. There must be some kind of race in their
+                            // code. Here's what usually happens.
+                            //
+                            // First, we send a request to move an order (35=G).
+                            // The exchange tells us that the move has succeeded.
+                            // Soon afterwards the exchange sends us a notification that our
+                            // cancel request has succeeded even though we didn't send any cancel
+                            // requests. The message has the same ClOrdID and OrigClOrd as
+                            // the previous notification.
+                            //
+                            // When this happens, the order actually stays live and can be matched.
+                            // 
+                            // To work around this problem, we try to identify the bogus cancellation
+                            // notifications and simply ignore them.
+                            _log.Warn("Ignoring an unexpected notification about a finished order");
+                            return;
+                        }
                         e = order.OnReceived(op, status, report);
                         onChange = order.OnChange;
                     }
