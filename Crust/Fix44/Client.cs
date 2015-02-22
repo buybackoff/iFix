@@ -687,6 +687,13 @@ namespace iFix.Crust.Fix44
                     _client._orders.Match(refSeqNum, clOrdID, origClOrdID, out op, out order);
                     if (status == RequestStatus.Unknown)
                         op = null;
+                    if (report != null && report.FillQuantity.HasValue && order == null)
+                    {
+                        // We've received a fill notification for an unknown order. We don't expect
+                        // such things to happen. This can cause the internal position to go out of
+                        // sync with the real position.
+                        _log.Error("Unmatched fill report. Internal position may be out of sync.");
+                    }
                     if (order != null)
                     {
                         if (op == null && status == RequestStatus.OK &&
