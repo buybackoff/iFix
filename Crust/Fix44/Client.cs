@@ -690,6 +690,7 @@ namespace iFix.Crust.Fix44
                     if (order != null)
                     {
                         if (op == null && status == RequestStatus.OK &&
+                            report != null &&
                             report.OrderStatus == OrderStatus.Finished &&
                             order.TargetStatus != OrderStatus.TearingDown &&
                             order.TargetStatus != OrderStatus.Finished)
