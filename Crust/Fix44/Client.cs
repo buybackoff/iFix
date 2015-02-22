@@ -128,7 +128,6 @@ namespace iFix.Crust.Fix44
 
         OrderState _state;
         readonly List<OrderOp> _inflightOps = new List<OrderOp>();
-        readonly string _firstClOrdID;
         string _lastClOrdID;
         readonly Action<OrderStateChangeEvent> _onChange;
         // The last time when we either received status for this order from the exchange
@@ -141,7 +140,6 @@ namespace iFix.Crust.Fix44
         public Order(OrderState state, string clOrdID, Action<OrderStateChangeEvent> onChange)
         {
             _state = state;
-            _firstClOrdID = clOrdID;
             _lastClOrdID = clOrdID;
             _onChange = onChange;
         }
@@ -216,8 +214,6 @@ namespace iFix.Crust.Fix44
             return _state.Status == OrderStatus.Finished && _inflightOps.Count == 0;
         }
 
-        // ClOrdID of the New Order Request.
-        public string FirstClOrdID { get { return _firstClOrdID; } }
         // The currently assigned ClOrdID. Initially it's the same as FirstClOrdID but then
         // it diverges (e.g., when the order is replaced).
         public string LastClOrdID { get { return _lastClOrdID; } set { _lastClOrdID = value; } }
