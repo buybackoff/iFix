@@ -695,6 +695,7 @@ namespace iFix.Crust.Fix44
                         if (op == null && status == RequestStatus.OK &&
                             report != null &&
                             report.OrderStatus == OrderStatus.Finished &&
+                            ((report.FillQuantity ?? 0) == 0) &&
                             order.TargetStatus != OrderStatus.TearingDown &&
                             order.TargetStatus != OrderStatus.Finished)
                         {
