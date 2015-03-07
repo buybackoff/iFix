@@ -42,6 +42,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BiDictionary.cs" />
     <Compile Include="Client.cs" />
     <Compile Include="Fix44\Client.cs" />
     <Compile Include="Connector.cs" />

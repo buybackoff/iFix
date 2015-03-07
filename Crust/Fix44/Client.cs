@@ -71,26 +71,6 @@ namespace iFix.Crust.Fix44
         /// Recommended value: 60.
         /// </summary>
         public double RequestTimeoutSeconds;
-
-        /// <summary>
-        /// If there was no activity for an order for this many seconds,
-        /// request explicit status update from the exchange to ensure we
-        /// are on the same page. Zero means no explicit status requests.
-        ///
-        /// WARNING: THIS DOESN'T WORK YET. DO NOT SET.
-        /// </summary>
-        public double OrderStatusSyncPeriod;
-
-        /// <summary>
-        /// If true, the client will attempt to cancel all orders immediately
-        /// after establishing a connection with the exchange. All orders will
-        /// be marked as finished after RequestTimeoutSeconds from the moment the
-        /// request is sent, or sooner if the exchange notifies us about changes
-        /// to the orders.
-        ///
-        /// WARNING: NOT YET TESTED. DO NOT SET.
-        /// </summary>
-        public bool CancelAllOrdersOnConnect;
     }
 
     class OrderOp
@@ -100,17 +80,16 @@ namespace iFix.Crust.Fix44
         public Object Key;
         public DurableSeqNum RefSeqNum;
         public string ClOrdID;
-        // What status do we expect the order to assume if the request succeeds.
-        public OrderStatus TargetStatus;
         // Time when the request was sent to the exchange.
         public DateTime SendTime;
-        // We expect the exchange to assign a new ID to the order upon receiving this op.
-        public bool InvalidatesOrderID;
     }
 
     class OrderReport
     {
         public OrderStatus OrderStatus;
+        // May be null. If not null, and not equal to the previous ID of the order,
+        // it is the new ID.
+        public string OrderID;
         // Set only for limit orders.
         public decimal? Price;
         // Not set if OrdStatus is Pending Cancel.
@@ -127,8 +106,15 @@ namespace iFix.Crust.Fix44
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
 
         OrderState _state;
-        readonly List<OrderOp> _inflightOps = new List<OrderOp>();
-        string _lastClOrdID;
+        // If order status is Created, the id is null.
+        // If it's Finished, it may be null.
+        // Otherwise not null. Once it becomes non-null, it can't become null again.
+        // OrderID is assigned when the order is accepted. After that it changes
+        // on each successful order replacement.
+        // TODO: ensure that the guarantee described above (esp the not-null part) holds.
+        string _orderID;
+        // Did we send a request affecting this order to which we expect a reply?
+        bool _pending = false;
         readonly Action<OrderStateChangeEvent> _onChange;
         // The last time when we either received status for this order from the exchange
         // or sent any requests for it.
@@ -137,73 +123,54 @@ namespace iFix.Crust.Fix44
         // from the exchange until we send the first request for it.
         DateTime _lastActivityTime = DateTime.MaxValue;
 
-        public Order(OrderState state, string clOrdID, Action<OrderStateChangeEvent> onChange)
+        public Order(OrderState state, Action<OrderStateChangeEvent> onChange)
         {
             _state = state;
-            _lastClOrdID = clOrdID;
             _onChange = onChange;
         }
 
-        public OrderStatus TargetStatus
-        {
-            get { return _inflightOps.Count > 0 ? _inflightOps[_inflightOps.Count - 1].TargetStatus : _state.Status; }
-        }
+        public bool Pending { get { return _pending; } }
 
-        public void OnSent(OrderOp op)
+        public string OrderID { get { return _orderID; } }
+
+        public void OnSent(bool pending)
         {
-            if (op != null)
+            _lastActivityTime = DateTime.UtcNow;
+            if (pending)
             {
-                _inflightOps.Add(op);
-                _lastActivityTime = op.SendTime;
-            }
-            else
-            {
-                _lastActivityTime = DateTime.UtcNow;
+                Debug.Assert(!_pending);
+                _pending = true;
             }
         }
 
-        // The op is not null if it's a reply to one of our requests.
-        // Request status makes sense only when op is not null.
+        // Request is set if it's a reply to out requests (the one that was pending).
         // OrderReport may be null. This happens, for example, when we get Reject<3> to our request.
-        public OrderStateChangeEvent OnReceived(OrderOp op, RequestStatus requestStatus, OrderReport report)
+        public void OnReceived(RequestStatus? requestStatus, OrderReport report)
         {
-            if (op != null)
+            _state = NewState(_state, report);
+            if (requestStatus.HasValue)
             {
-                switch (requestStatus)
-                {
-                    case RequestStatus.Unknown:
-                        _log.Warn("FIX request with ClOrdID '{0}' for order '{1}' timed out", op.ClOrdID, LastClOrdID);
-                        break;
-                    case RequestStatus.Error:
-                        _log.Warn("FIX request with ClOrdID '{0}' for order '{1}' failed", op.ClOrdID, LastClOrdID);
-                        break;
-                    case RequestStatus.OK:
-                        _log.Info("FIX request with ClOrdID '{0}' for order '{1}' succeeded", op.ClOrdID, LastClOrdID);
-                        break;
-                }
-            }
-
-            OrderState oldState = _state;
-            _state = NewState(oldState, report);
-            OrderStateChangeEvent e = new OrderStateChangeEvent()
-            {
-                NewState = _state,
-                Fill = MakeFill(oldState, _state, report),
-            };
-            if (op != null)
-            {
-                _inflightOps.Remove(op);
-                e.FinishedRequestKey = op.Key;
-                e.FinishedRequestStatus = requestStatus;
-                // When Submit() request fails, transition to OrderStatus.Finished.
-                if (requestStatus == RequestStatus.Error && _state.Status == OrderStatus.Created)
+                Debug.Assert(_pending);
+                _pending = false;
+                // When Submit() request fails or times out, transition to OrderStatus.Finished.
+                // Ideally, when Submit() times out, it would be nice to ask the exchange for the status
+                // MOEX doesn't support status query by ClOrdID, so we can't really do that.
+                // Let's assume that the order is dead.
+                if (requestStatus != RequestStatus.OK && _state.Status == OrderStatus.Created)
                     _state.Status = OrderStatus.Finished;
             }
             if (report != null)
+            {
                 _lastActivityTime = DateTime.UtcNow;
-            _log.Info("Publishing OrderStateChangeEvent: {0}", e);
-            return e;
+                if (report.OrderID != null && report.OrderID != _orderID)
+                {
+                    _log.Info("OrderID has changed: {0} => {1}", _orderID, report.OrderID);
+                    _orderID = report.OrderID;
+                }
+            }
         }
+
+        public OrderState State { get { return _state; } }
 
         // Can we remove this order from memory? It's safe to do if we can't send any
         // useful requests to the exchange for this order (the order is in its terminal state)
@@ -211,22 +178,11 @@ namespace iFix.Crust.Fix44
         // have been completed).
         public bool Done()
         {
-            return _state.Status == OrderStatus.Finished && _inflightOps.Count == 0;
+            return _state.Status == OrderStatus.Finished && !_pending;
         }
 
-        // The currently assigned ClOrdID. Initially it's the same as FirstClOrdID but then
-        // it diverges (e.g., when the order is replaced).
-        public string LastClOrdID { get { return _lastClOrdID; } set { _lastClOrdID = value; } }
         public Action<OrderStateChangeEvent> OnChange { get { return _onChange; } }
-        public bool PendingNewID
-        {
-            get
-            {
-                foreach (OrderOp op in _inflightOps)
-                    if (op.InvalidatesOrderID) return true;
-                return false;
-            }
-        }
+
         public DateTime LastActivityTime
         {
             get
@@ -246,73 +202,52 @@ namespace iFix.Crust.Fix44
                 Price = report.Price.HasValue ? report.Price.Value : old.Price,
             };
         }
-
-        static Fill MakeFill(OrderState oldState, OrderState newState, OrderReport report)
-        {
-            decimal qty = newState.FilledQuantity - oldState.FilledQuantity;
-            if (qty <= 0) return null;
-            if (report.FillPrice.HasValue && report.FillQuantity.HasValue && qty == report.FillQuantity.Value)
-                return new Fill() { Price = report.FillPrice.Value, Quantity = qty };
-            else
-                return new Fill() { Quantity = qty };
-        }
     }
 
     class OrderHeap
     {
         Dictionary<DurableSeqNum, OrderOp> _opsBySeqNum = new Dictionary<DurableSeqNum, OrderOp>();
-        Dictionary<string, OrderOp> _opsByOrdID = new Dictionary<string, OrderOp>();
-        Dictionary<string, Order> _ordersByOrdID = new Dictionary<string, Order>();
+        Dictionary<string, OrderOp> _opsByClOrdID = new Dictionary<string, OrderOp>();
+        BiDictionary<Order, string> _ordersByOrderID = new BiDictionary<Order, string>();
         SortedPropertyDictionary<Order, DateTime> _ordersByLastActivityTime = new SortedPropertyDictionary<Order, DateTime>();
         SortedPropertyDictionary<OrderOp, DateTime> _opsBySendTime = new SortedPropertyDictionary<OrderOp, DateTime>();
 
         public void Add(Order order, OrderOp op)
         {
-            _ordersByOrdID[order.LastClOrdID] = order;
-            _opsBySeqNum[op.RefSeqNum] = op;
-            _opsByOrdID[op.ClOrdID] = op;
+            _opsBySeqNum.Add(op.RefSeqNum, op);
+            _opsByClOrdID.Add(op.ClOrdID, op);
             _ordersByLastActivityTime.Update(order, order.LastActivityTime);
             _opsBySendTime.Add(op, op.SendTime);
         }
 
-        public void Match(DurableSeqNum refSeqNum, string clOrdID, string origClOrdID, out OrderOp op, out Order order)
+        public OrderOp FindOp(DurableSeqNum refSeqNum, string clOrdID)
         {
-            // Any request is finished when we receive Reject with the matching RefSeqNum or
+            // A request is finished when we receive Reject with the matching RefSeqNum or
             // Execution Report with the matching ClOrdID.
             // Additionally, Cancel is done when we receive Order Cancel Reject with the
             // matching ClOrdID.
-            //
-            // An Execution Report matches an order if:
-            // 1. ClOrdID is equal to the first or the last ClOrdID of the order.
-            // 2. OrigClOrdID is equal to the first or the last ClOrdID of the order.
-            op = null;
-            order = null;
+            OrderOp res;
+            if (refSeqNum != null && _opsBySeqNum.TryGetValue(refSeqNum, out res)) return res;
+            if (clOrdID != null && _opsByClOrdID.TryGetValue(clOrdID, out res)) return res;
+            return null;
+        }
 
-            if (refSeqNum != null && _opsBySeqNum.TryGetValue(refSeqNum, out op) ||
-                clOrdID != null && _opsByOrdID.TryGetValue(clOrdID, out op))
-            {
-                order = op.Order;
-            }
-            else if (clOrdID != null && _ordersByOrdID.TryGetValue(clOrdID, out order) ||
-                origClOrdID != null && _ordersByOrdID.TryGetValue(origClOrdID, out order))
-            {
-            }
-
-            // If the exchange is assigning a new ClOrdID to the order, remember it.
-            if (clOrdID != null && origClOrdID != null && clOrdID != origClOrdID && order != null)
-            {
-                if (order.LastClOrdID != clOrdID)
-                    _ordersByOrdID.Remove(order.LastClOrdID);
-                order.LastClOrdID = clOrdID;
-                _ordersByOrdID[order.LastClOrdID] = order;
-            }
+        public Order FindOrder(string orderID)
+        {
+            // An Execution Report matches an order if either:
+            // 1. It matches a request for this order. In other words, if FindOp() returns an op,
+            //    it links to the order. In this case FindOrder() doesn't need to be called.
+            // 2. OrderID matches.
+            Order res;
+            if (orderID != null && _ordersByOrderID.BySecond.TryGetValue(orderID, out res)) return res;
+            return null;
         }
 
         public void Finish(OrderOp op, Order order)
         {
             if (op != null)
             {
-                _opsByOrdID.Remove(op.ClOrdID);
+                _opsByClOrdID.Remove(op.ClOrdID);
                 _opsBySeqNum.Remove(op.RefSeqNum);
                 _opsBySendTime.Remove(op);
             }
@@ -320,12 +255,14 @@ namespace iFix.Crust.Fix44
             {
                 if (order.Done())
                 {
-                    _ordersByOrdID.Remove(order.LastClOrdID);
+                    _ordersByOrderID.ByFirst.Remove(order);
                     _ordersByLastActivityTime.Remove(order);
                 }
                 else
                 {
                     _ordersByLastActivityTime.Update(order, order.LastActivityTime);
+                    if (order.OrderID != null)
+                        _ordersByOrderID.ByFirst[order] = order.OrderID;
                 }
             }
         }
@@ -417,7 +354,6 @@ namespace iFix.Crust.Fix44
         readonly Task _reciveLoop;
         readonly Task _syncLoop;
         volatile bool _stopping = false;
-        volatile Object _cancelAllTime = DateTime.MinValue;
         readonly Object _onChangeMonitor = new Object();
 
         public Client(ClientConfig cfg, IConnector connector)
@@ -441,7 +377,7 @@ namespace iFix.Crust.Fix44
                 Price = request.Price,
                 FilledQuantity = 0,
             };
-            return new OrderCtrl(this, new Order(state, _clOrdIDGenerator.GenerateID(), onChange), request);
+            return new OrderCtrl(this, new Order(state, onChange), request);
         }
 
         public void CancelAllOrders()
@@ -491,10 +427,6 @@ namespace iFix.Crust.Fix44
                     DateTime now = DateTime.UtcNow;
                     if (_cfg.RequestTimeoutSeconds > 0)
                         while (TryExpireOp(now)) { }
-                    if (_cfg.OrderStatusSyncPeriod > 0)
-                        while (TryRequestOrderStatus(now)) { }
-                    if (_cfg.CancelAllOrdersOnConnect && _cfg.RequestTimeoutSeconds > 0)
-                        while (TryExpireCancelledOrders(now)) { }
                 }
                 catch (Exception e)
                 {
@@ -512,61 +444,24 @@ namespace iFix.Crust.Fix44
                 OrderOp op = _orders.OldestOp();
                 if (op == null || (now - op.SendTime).TotalSeconds < _cfg.RequestTimeoutSeconds)
                     return false;
-                e = op.Order.OnReceived(op, RequestStatus.Unknown, null);
+                _log.Warn("FIX request with ClOrdID '{0}' and Key '{1}' for order '{2}' timed out",
+                          op.ClOrdID, op.Key, op.Order.OrderID);
+                op.Order.OnReceived(RequestStatus.Unknown, null);
                 onChange = op.Order.OnChange;
+                e = new OrderStateChangeEvent()
+                {
+                    NewState = op.Order.State,
+                    FinishedRequestKey = op.Key,
+                    FinishedRequestStatus = RequestStatus.Unknown,
+                };
                 _orders.Finish(op, op.Order);
             }
             try
             {
                 if (onChange != null)
                 {
-                    lock (_onChangeMonitor) { onChange.Invoke(e); }
-                }
-            }
-            catch (Exception ex)
-            {
-                _log.Warn("Event handler failed", ex);
-            }
-            return true;
-        }
-
-        bool TryRequestOrderStatus(DateTime now)
-        {
-            lock (_monitor)
-            {
-                Order order = _orders.MostQuietOrder();
-                if (order == null || (now - order.LastActivityTime).TotalSeconds < _cfg.OrderStatusSyncPeriod)
-                    return false;
-                var msg = new Mantle.Fix44.OrderStatusRequest() { StandardHeader = MakeHeader() };
-                msg.ClOrdID.Value = order.LastClOrdID;
-                _connection.Send(msg);
-                order.OnSent(null);
-            }
-            return true;
-        }
-
-        bool TryExpireCancelledOrders(DateTime now)
-        {
-            if ((now - (DateTime)_cancelAllTime).TotalSeconds < _cfg.RequestTimeoutSeconds) return false;
-            OrderStateChangeEvent e = null;
-            Action<OrderStateChangeEvent> onChange = null;
-            lock (_monitor)
-            {
-                Order order = _orders.MostQuietOrder();
-                if (order == null || order.TargetStatus == OrderStatus.Finished ||
-                    order.LastActivityTime >= (DateTime)_cancelAllTime)
-                {
-                    return false;
-                }
-                e = order.OnReceived(null, RequestStatus.Unknown,
-                                     new OrderReport() { OrderStatus = OrderStatus.Finished });
-                onChange = order.OnChange;
-                _orders.Finish(null, order);
-            }
-            try
-            {
-                if (onChange != null)
-                {
+                    _log.Info("Publishing OrderStateChangeEvent: {0}", e);
+                    // TODO: there is a race in here. OrderStateChangeEvent may be sent out of order.
                     lock (_onChangeMonitor) { onChange.Invoke(e); }
                 }
             }
@@ -641,6 +536,8 @@ namespace iFix.Crust.Fix44
                         reqStatus = RequestStatus.OK;
                 }
                 OrderReport report = new OrderReport();
+                if (msg.OrderID.HasValue)
+                    report.OrderID = msg.OrderID.Value;
                 switch (msg.OrdStatus.Value)
                 {
                     case '0': report.OrderStatus = OrderStatus.Accepted; break;
@@ -667,23 +564,43 @@ namespace iFix.Crust.Fix44
                     if (msg.LastPx.HasValue && msg.LastPx.Value > 0)
                         report.FillPrice = msg.LastPx.Value;
                 }
-                HandleMessage(null, msg.ClOrdID.Value, msg.OrigClOrdID.Value, reqStatus, report);
+                HandleMessage(null, msg.ClOrdID.Value, msg.OrigOrderID.Value, reqStatus, report);
                 return null;
             }
 
-            void HandleMessage(DurableSeqNum refSeqNum, string clOrdID, string origClOrdID,
+            void HandleMessage(DurableSeqNum refSeqNum, string clOrdID, string origOrderID,
                                RequestStatus status, OrderReport report)
             {
                 OrderStateChangeEvent e = null;
                 Action<OrderStateChangeEvent> onChange = null;
                 lock (_client._monitor)
                 {
-                    OrderOp op;
-                    Order order;
-                    _client._orders.Match(refSeqNum, clOrdID, origClOrdID, out op, out order);
-                    if (status == RequestStatus.Unknown)
-                        op = null;
-                    if (report != null && report.FillQuantity.HasValue && order == null)
+                    // Try to match an OrderOp. If successful, we also have the order.
+                    // Otherwise if OrigOrderID is set, use it to find the order.
+                    // Else use OrderID.
+                    OrderOp op = _client._orders.FindOp(refSeqNum, clOrdID);
+                    Order order = op != null ? op.Order : _client._orders.FindOrder(origOrderID ?? report.OrderID);
+
+                    if (op != null)
+                    {
+                        switch (status)
+                        {
+                            case RequestStatus.Error:
+                                _log.Warn("FIX request with ClOrdID '{0}' and key '{1}' for order '{2}' failed",
+                                          op.ClOrdID, op.Key, order.OrderID);
+                                break;
+                            case RequestStatus.Unknown:
+                                _log.Error("Can't make sense of response to request with ClOrdID '{0}' and Key '{1}' for order '{2}'. " +
+                                           "Treating it the same as timeout.", op.ClOrdID, op.Key, order.OrderID);
+                                break;
+                            case RequestStatus.OK:
+                                _log.Info("FIX request with ClOrdID '{0}' and key '{1}' for order '{2}' succeeded",
+                                          op.ClOrdID, op.Key, order.OrderID);
+                                break;
+                        }
+                    }
+
+                    if (report != null && report.FillQuantity.HasValue && report.FillQuantity.Value > 0 && order == null)
                     {
                         // We've received a fill notification for an unknown order. We don't expect
                         // such things to happen. This can cause the internal position to go out of
@@ -692,40 +609,37 @@ namespace iFix.Crust.Fix44
                     }
                     if (order != null)
                     {
-                        if (op == null && status == RequestStatus.OK &&
-                            report != null &&
-                            report.OrderStatus == OrderStatus.Finished &&
-                            ((report.FillQuantity ?? 0) == 0) &&
-                            order.TargetStatus != OrderStatus.TearingDown &&
-                            order.TargetStatus != OrderStatus.Finished)
+                        OrderState oldState = order.State;
+                        order.OnReceived(op == null ? null : (RequestStatus?)status, report);
+                        e = new OrderStateChangeEvent()
                         {
-                            // Occasionally MOEX sends unsolicited erroneous execution reports that say
-                            // the order has been cancelled. There must be some kind of race in their
-                            // code. Here's what usually happens.
-                            //
-                            // First, we send a request to move an order (35=G).
-                            // The exchange tells us that the move has succeeded.
-                            // Soon afterwards the exchange sends us a notification that our
-                            // cancel request has succeeded even though we didn't send any cancel
-                            // requests. The message has the same ClOrdID and OrigClOrd as
-                            // the previous notification.
-                            //
-                            // When this happens, the order actually stays live and can be matched.
-                            // 
-                            // To work around this problem, we try to identify the bogus cancellation
-                            // notifications and simply ignore them.
-                            _log.Warn("Ignoring an unexpected notification about a finished order");
-                            return;
+                            NewState = order.State,
+                            Fill = MakeFill(oldState, order.State, report),
+                        };
+                        if (op != null)
+                        {
+                            e.FinishedRequestKey = op.Key;
+                            e.FinishedRequestStatus = status;
                         }
-                        e = order.OnReceived(op, status, report);
                         onChange = order.OnChange;
                     }
                     _client._orders.Finish(op, order);
                 }
                 if (onChange != null)
                 {
+                    _log.Info("Publishing OrderStateChangeEvent: {0}", e);
                     lock (_client._onChangeMonitor) { onChange.Invoke(e); }
                 }
+            }
+
+            static Fill MakeFill(OrderState oldState, OrderState newState, OrderReport report)
+            {
+                decimal qty = newState.FilledQuantity - oldState.FilledQuantity;
+                if (qty <= 0) return null;
+                if (report.FillPrice.HasValue && report.FillQuantity.HasValue && qty == report.FillQuantity.Value)
+                    return new Fill() { Price = report.FillPrice.Value, Quantity = qty };
+                else
+                    return new Fill() { Quantity = qty };
             }
         }
 
@@ -739,15 +653,6 @@ namespace iFix.Crust.Fix44
             session.Send(logon);
             if (!(session.Receive(cancellationToken).Result is Mantle.Fix44.Logon))
                 throw new UnexpectedMessageReceived("Expected Logon");
-            if (_cfg.CancelAllOrdersOnConnect)
-            {
-                var msg = new Mantle.Fix44.OrderMassCancelRequest() { StandardHeader = MakeHeader() };
-                msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
-                msg.Account.Value = _cfg.Account;
-                msg.TransactTime.Value = msg.StandardHeader.SendingTime.Value;
-                session.Send(msg);
-                _cancelAllTime = DateTime.UtcNow;
-            }
         }
 
         Mantle.Fix44.StandardHeader MakeHeader()
@@ -767,9 +672,9 @@ namespace iFix.Crust.Fix44
             // thing to do because we don't have the SeqNum until the message is sent.
             lock (_monitor)
             {
-                if (order.TargetStatus != OrderStatus.Created) return false;
+                if (order.State.Status != OrderStatus.Created || order.Pending) return false;
                 var msg = new Mantle.Fix44.NewOrderSingle() { StandardHeader = MakeHeader() };
-                msg.ClOrdID.Value = order.LastClOrdID;
+                msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
                 msg.Account.Value = _cfg.Account;
                 if (_cfg.PartyID != null)
                 {
@@ -797,12 +702,10 @@ namespace iFix.Crust.Fix44
                     Key = requestKey,
                     RefSeqNum = seqNum,
                     Order = order,
-                    TargetStatus = OrderStatus.Accepted,
                     SendTime = DateTime.UtcNow,
-                    InvalidatesOrderID = false,
                 };
                 _orders.Add(order, op);
-                order.OnSent(op);
+                order.OnSent(pending:true);
                 return true;
             }
         }
@@ -811,9 +714,10 @@ namespace iFix.Crust.Fix44
         {
             lock (_monitor)
             {
-                if (order.PendingNewID) return false;
-                if (order.TargetStatus == OrderStatus.Finished) return false;
-                if (order.TargetStatus == OrderStatus.TearingDown) {
+                if (order.Pending) return false;
+                if (order.OrderID == null) return false;  // This means the order is in state Created.
+                if (order.State.Status == OrderStatus.Finished) return false;
+                if (order.State.Status == OrderStatus.TearingDown) {
                     if (_cfg.RequestTimeoutSeconds <= 0)
                         return false;
                     if ((DateTime.UtcNow - order.LastActivityTime).TotalSeconds < _cfg.RequestTimeoutSeconds)
@@ -821,7 +725,8 @@ namespace iFix.Crust.Fix44
                 }
                 var msg = new Mantle.Fix44.OrderCancelRequest() { StandardHeader = MakeHeader() };
                 msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
-                msg.OrigClOrdID.Value = order.LastClOrdID;
+                msg.OrigClOrdID.Value = msg.ClOrdID.Value;  // It's required but ignored.
+                msg.OrderID.Value = order.OrderID;
                 msg.Side.Value = request.Side == Side.Buy ? '1' : '2';
                 msg.TransactTime.Value = msg.StandardHeader.SendingTime.Value;
 
@@ -834,12 +739,10 @@ namespace iFix.Crust.Fix44
                     Key = requestKey,
                     RefSeqNum = seqNum,
                     Order = order,
-                    TargetStatus = OrderStatus.Finished,
                     SendTime = DateTime.UtcNow,
-                    InvalidatesOrderID = false,
                 };
                 _orders.Add(order, op);
-                order.OnSent(op);
+                order.OnSent(pending:true);
                 return true;
             }
         }
@@ -848,11 +751,12 @@ namespace iFix.Crust.Fix44
         {
             lock (_monitor)
             {
-                if (order.PendingNewID) return false;
-                if (order.TargetStatus != OrderStatus.Accepted) return false;
+                if (order.Pending) return false;
+                if (order.State.Status != OrderStatus.Accepted) return false;
                 var msg = new Mantle.Fix44.OrderCancelReplaceRequest() { StandardHeader = MakeHeader() };
                 msg.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
-                msg.OrigClOrdID.Value = order.LastClOrdID;
+                msg.OrigClOrdID.Value = msg.ClOrdID.Value;
+                msg.OrderID.Value = order.OrderID;
                 msg.Account.Value = _cfg.Account;
                 if (_cfg.PartyID != null)
                 {
@@ -879,12 +783,10 @@ namespace iFix.Crust.Fix44
                     Key = requestKey,
                     RefSeqNum = seqNum,
                     Order = order,
-                    TargetStatus = OrderStatus.Accepted,
                     SendTime = DateTime.UtcNow,
-                    InvalidatesOrderID = true,
                 };
                 _orders.Add(order, op);
-                order.OnSent(op);
+                order.OnSent(pending:true);
                 return true;
             }
         }

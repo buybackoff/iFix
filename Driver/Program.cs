@@ -30,7 +30,6 @@ namespace iFix.Driver
                         // PartyIDSource = 'D',
                         // PartyRole = 3,
                         RequestTimeoutSeconds = 0,
-                        OrderStatusSyncPeriod = 0,
                     },
                     new TcpConnector("194.84.44.1", 9120));
                 var req = new NewOrderRequest()

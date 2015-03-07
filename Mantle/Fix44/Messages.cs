@@ -334,6 +334,7 @@ namespace iFix.Mantle.Fix44
         public static readonly MsgType MsgType = new MsgType { Value = "F" };
         public OrigClOrdID OrigClOrdID = new OrigClOrdID();
         public ClOrdID ClOrdID = new ClOrdID();
+        public OrderID OrderID = new OrderID();
         public Side Side = new Side();
         public TransactTime TransactTime = new TransactTime();
 
@@ -343,6 +344,7 @@ namespace iFix.Mantle.Fix44
             yield return StandardHeader;
             yield return OrigClOrdID;
             yield return ClOrdID;
+            yield return OrderID;
             yield return Side;
             yield return TransactTime;
         }
@@ -359,6 +361,7 @@ namespace iFix.Mantle.Fix44
         public static readonly MsgType MsgType = new MsgType { Value = "G" };
         public ClOrdID ClOrdID = new ClOrdID();
         public OrigClOrdID OrigClOrdID = new OrigClOrdID();
+        public OrderID OrderID = new OrderID();
         public Account Account = new Account();
         public PartyGroup PartyGroup = new PartyGroup();
         public Instrument Instrument = new Instrument();
@@ -376,6 +379,7 @@ namespace iFix.Mantle.Fix44
             yield return StandardHeader;
             yield return ClOrdID;
             yield return OrigClOrdID;
+            yield return OrderID;
             yield return Account;
             yield return PartyGroup;
             yield return Instrument;
@@ -398,6 +402,7 @@ namespace iFix.Mantle.Fix44
     public class ExecutionReport : Message, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "8" };
+        public OrderID OrderID = new OrderID();
         public ClOrdID ClOrdID = new ClOrdID();
         public OrigClOrdID OrigClOrdID = new OrigClOrdID();
         public ExecType ExecType = new ExecType();
@@ -407,11 +412,13 @@ namespace iFix.Mantle.Fix44
         public LastPx LastPx = new LastPx();
         public LeavesQty LeavesQty = new LeavesQty();
         public CumQty CumQty = new CumQty();
+        public OrigOrderID OrigOrderID = new OrigOrderID();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
             yield return MsgType;
             yield return StandardHeader;
+            yield return OrderID;
             yield return ClOrdID;
             yield return OrigClOrdID;
             yield return ExecType;
@@ -421,6 +428,7 @@ namespace iFix.Mantle.Fix44
             yield return LastPx;
             yield return LeavesQty;
             yield return CumQty;
+            yield return OrigOrderID;
         }
 
         public T Visit<T>(IServerMessageVisitor<T> visitor)
