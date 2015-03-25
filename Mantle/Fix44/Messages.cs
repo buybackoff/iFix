@@ -402,6 +402,8 @@ namespace iFix.Mantle.Fix44
         public OrigClOrdID OrigClOrdID = new OrigClOrdID();
         public ExecType ExecType = new ExecType();
         public OrdStatus OrdStatus = new OrdStatus();
+        public Symbol Symbol = new Symbol();
+        public Side Side = new Side();
         public Price Price = new Price();
         public LastQty LastQty = new LastQty();
         public LastPx LastPx = new LastPx();
@@ -416,6 +418,8 @@ namespace iFix.Mantle.Fix44
             yield return OrigClOrdID;
             yield return ExecType;
             yield return OrdStatus;
+            yield return Symbol;
+            yield return Side;
             yield return Price;
             yield return LastQty;
             yield return LastPx;

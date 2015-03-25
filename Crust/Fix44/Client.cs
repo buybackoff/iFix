@@ -117,9 +117,11 @@ namespace iFix.Crust.Fix44
         public decimal? LeavesQuantity;
         // Not set if OrdStatus is Pending Cancel.
         public decimal? CumFillQuantity;
-        // These two fields are set on Fill reports.
+        // These four fields are set on Fill reports.
         public decimal? FillQuantity;
         public decimal? FillPrice;
+        public string Symbol;
+        public Side? Side;
     }
 
     class Order
@@ -444,6 +446,8 @@ namespace iFix.Crust.Fix44
             return new OrderCtrl(this, new Order(state, _clOrdIDGenerator.GenerateID(), onChange), request);
         }
 
+        public event Action<FillEvent> OnFill;
+
         public void CancelAllOrders()
         {
             var msg = new Mantle.Fix44.OrderMassCancelRequest() { StandardHeader = MakeHeader() };
@@ -655,6 +659,13 @@ namespace iFix.Crust.Fix44
                         _log.Error("Unexpected OrdStatus: {0}", msg);
                         return null;
                 }
+                if (msg.Symbol.HasValue)
+                    report.Symbol = msg.Symbol.Value;
+                if (msg.Side.HasValue)
+                {
+                    if (msg.Side.Value == '1') report.Side = Side.Buy;
+                    else if (msg.Side.Value == '2') report.Side = Side.Sell;
+                }
                 if (msg.Price.HasValue && msg.Price.Value > 0)
                     report.Price = msg.Price.Value;
                 if (msg.LeavesQty.HasValue && msg.OrdStatus.Value != '6')
@@ -685,10 +696,13 @@ namespace iFix.Crust.Fix44
                         op = null;
                     if (report != null && report.FillQuantity.HasValue && order == null)
                     {
-                        // We've received a fill notification for an unknown order. We don't expect
-                        // such things to happen. This can cause the internal position to go out of
-                        // sync with the real position.
-                        _log.Error("Unmatched fill report. Internal position may be out of sync.");
+                        // We've received a fill notification for an unknown order. This occasionally happens.
+                        FillEvent fillEvent = MakeFillEvent(report);
+                        if (fillEvent != null && _client.OnFill != null)
+                        {
+                            _log.Info("Publishing FillEvent: {0}", fillEvent);
+                            lock (_client._onChangeMonitor) _client.OnFill.Invoke(fillEvent);
+                        }
                     }
                     if (order != null)
                     {
@@ -726,6 +740,26 @@ namespace iFix.Crust.Fix44
                 {
                     lock (_client._onChangeMonitor) { onChange.Invoke(e); }
                 }
+            }
+
+            static FillEvent MakeFillEvent(OrderReport report)
+            {
+                if (!report.Side.HasValue)
+                {
+                    _log.Error("Missing Side from a fill notification.");
+                    return null;
+                }
+                if (report.Symbol == null)
+                {
+                    _log.Error("Missing Symbol from a fill notification.");
+                    return null;
+                }
+                return new FillEvent()
+                {
+                    Side = report.Side.Value,
+                    Symbol = report.Symbol,
+                    Fill = new Fill() { Quantity = report.FillQuantity.Value, Price = report.FillPrice }
+                };
             }
         }
 

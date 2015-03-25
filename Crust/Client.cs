@@ -300,6 +300,30 @@ namespace iFix.Crust
     }
 
     /// <summary>
+    /// Describes a fill of an unspecified order.
+    /// </summary>
+    public class FillEvent
+    {
+        /// <summary>
+        /// Ticker symbol. For example, "USD000UTSTOM".
+        /// </summary>
+        public string Symbol;
+        /// <summary>
+        /// Did we buy or sell?
+        /// </summary>
+        public Side Side;
+        /// <summary>
+        /// How much we bought/sold and at what price.
+        /// </summary>
+        public Fill Fill;
+
+        public override string ToString()
+        {
+            return String.Format("Symbol = {0}, Side = {1}, Fill = {2}", Symbol, Side, Fill);
+        }
+    }
+
+    /// <summary>
     /// Client for communication with the exchange. Allows placing orders, tracking and amending them.
     /// Does not provide market data for other market players.
     ///
@@ -327,6 +351,12 @@ namespace iFix.Crust
         /// It's not allowed to modify 'request' after passing it to CreateOrder().
         /// </summary>
         IOrderCtrl CreateOrder(NewOrderRequest request, Action<OrderStateChangeEvent> onChange);
+
+        /// <summary>
+        /// Fires when there is a stranded fill that doesn't correspond to any live order.
+        /// Subscription should happen before the first order is created.
+        /// </summary>
+        event Action<FillEvent> OnFill;
 
         /// <summary>
         /// Cancels all orders.
