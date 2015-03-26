@@ -319,7 +319,7 @@ namespace iFix.Crust
 
         public override string ToString()
         {
-            return String.Format("Symbol = {0}, Side = {1}, Fill = {2}", Symbol, Side, Fill);
+            return String.Format("Symbol = {0}, Side = {1}, Fill = ({2})", Symbol, Side, Fill);
         }
     }
 
