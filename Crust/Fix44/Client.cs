@@ -251,7 +251,7 @@ namespace iFix.Crust.Fix44
 
         static Fill MakeFill(OrderState oldState, OrderState newState, OrderReport report)
         {
-            if (report.FillPrice.HasValue && report.FillQuantity.HasValue)
+            if (report != null && report.FillPrice.HasValue && report.FillQuantity.HasValue)
                 return new Fill() { Price = report.FillPrice.Value, Quantity = report.FillQuantity.Value };
             else
                 return null;
