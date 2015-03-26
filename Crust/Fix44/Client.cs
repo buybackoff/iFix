@@ -251,12 +251,10 @@ namespace iFix.Crust.Fix44
 
         static Fill MakeFill(OrderState oldState, OrderState newState, OrderReport report)
         {
-            decimal qty = newState.FilledQuantity - oldState.FilledQuantity;
-            if (qty <= 0) return null;
-            if (report.FillPrice.HasValue && report.FillQuantity.HasValue && qty == report.FillQuantity.Value)
-                return new Fill() { Price = report.FillPrice.Value, Quantity = qty };
+            if (report.FillPrice.HasValue && report.FillQuantity.HasValue)
+                return new Fill() { Price = report.FillPrice.Value, Quantity = report.FillQuantity.Value };
             else
-                return new Fill() { Quantity = qty };
+                return null;
         }
     }
 
