@@ -1,4 +1,5 @@
-﻿using System;
+﻿using iFix.Common;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
@@ -16,7 +17,6 @@ namespace iFix.Core
         // Does NOT verify that the message is well formed.
         public RawMessage(ArraySegment<byte> serialized)
         {
-            Debug.Assert(serialized != null);
             _serialized = serialized;
         }
 

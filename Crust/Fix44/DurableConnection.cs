@@ -15,7 +15,7 @@ namespace iFix.Crust.Fix44
         // If null, the object has been disposed.
         IConnection _connection;
         // Session identifier. Unique within the process.
-        long _id;
+        readonly long _id;
         // Used only in Dispose() to make it reentrant and thread-safe.
         Object _monitor = new Object();
         // When Dispose() is called, we signal all inflight Send() and Receive() calls
@@ -24,7 +24,7 @@ namespace iFix.Crust.Fix44
         // When _refCount reaches zero, it's safe to close the connection.
         CountdownEvent _refCount = new CountdownEvent(1);
 
-        // The initial reference count is zero.
+        // The initial reference count is one. The first call to Dispose() will drop it.
         public Session(IConnection connection, long id)
         {
             _connection = connection;
@@ -46,7 +46,7 @@ namespace iFix.Crust.Fix44
         // Requires: ref count is not zero for the whole duration of Receive(), both
         // its synchronous and asynchronous parts.
         //
-        // It's not allowed to called Receive() until the task created by the previous call
+        // It's not allowed to call Receive() until the task created by the previous call
         // to Receive() has finished.
         public Task<Mantle.Fix44.IMessage> Receive()
         {
@@ -60,7 +60,10 @@ namespace iFix.Crust.Fix44
             return _connection.Send(msg);
         }
 
-        // Waits for the ref count to drop to zero and closes the connection.
+        // If it's not the first call to Dispose(), does nothing.
+        //
+        // Otherwise decrements the ref count (it mirror the constructor, which initializes
+        // the ref count with one), waits for the ref count to drop to zero and closes the connection.
         // The whole point of this class is to avoid closing the connection while
         // someone is using it.
         //
@@ -105,6 +108,11 @@ namespace iFix.Crust.Fix44
                 return (int)(SessionID * 2654435761 + SeqNum);
             }
         }
+
+        public override string ToString()
+        {
+            return String.Format("SessionID = {0}, SeqNum = {1}", SessionID, SeqNum);
+        }
     }
 
     class DurableMessage
@@ -122,9 +130,12 @@ namespace iFix.Crust.Fix44
         // The current session that we believe to be valid.
         // Access to the reference is protected by _sessionMonitor.
         Session _session = null;
-        long _sessionID = 0;
-        // Protects access to _session and _sessionID.
+        // Protects access to _session.
         readonly Object _sessionMonitor = new Object();
+        long _sessionID = 0;
+        // This monitor is held while the session is being initialized.
+        // It also protects _sessionID.
+        readonly Object _sessionInitMonitor = new Object();
         // This monitor is used to guarantee that at most one thread is sending
         // data at a time.
         readonly Object _sendMonitor = new Object();
@@ -138,20 +149,19 @@ namespace iFix.Crust.Fix44
             _connector = connector;
         }
 
-        // It's not allowed to called Receive() until the task created by the previous call
+        // It's not allowed to call Receive() until the task created by the previous call
         // to Receive() has finished.
         //
-        // Returns a non-null task containing null message if the object has been
-        // disposed of.
+        // Throws ObjectDisposedExpection() either synchronously or asynchronously if the connection has
+        // been disposed of. Otherwise doesn't throw and returns non-null message.
         public async Task<DurableMessage> Receive()
         {
             Session session = null;
             while (true)
             {
+                session = GetSession(session);
                 try
                 {
-                    session = GetSession(session);
-                    if (session == null) return null;
                     try
                     {
                         return new DurableMessage { SessionID = session.ID, Message = await session.Receive() };
@@ -168,35 +178,34 @@ namespace iFix.Crust.Fix44
             }
         }
 
-        // Returns null if the object has been disposed of, otherwise returns
-        // sequence number of the sent message.
+        // Throws ObjectDisposedExpection if the connection has been disposed of. Returns null if not
+        // connected or if send fails. Otherwise returns sequence number of the sent message.
         //
-        // Never throws. Can be called concurrently -- all calls will be
-        // serialized internally.
+        // Can be called concurrently -- all calls are serialized internally.
         public DurableSeqNum Send(Mantle.Fix44.IMessage msg)
         {
             lock (_sendMonitor)
             {
-                Session session = null;
-                while (true)
+                Session session = TryGetSession(null);
+                if (session == null)
                 {
-                    try
-                    {
-                        session = GetSession(session);
-                        if (session == null) return null;
-                        try
-                        {
-                            return new DurableSeqNum { SessionID = session.ID, SeqNum = session.Send(msg) };
-                        }
-                        finally
-                        {
-                            session.DecRef();
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        _log.Error("Failed to publish a message. Will reconnect and retry.", e);
-                    }
+                    _log.Error("Unable to publish a messge: not connected.");
+                    return null;
+                }
+                try
+                {
+                    return new DurableSeqNum { SessionID = session.ID, SeqNum = session.Send(msg) };
+                }
+                catch (Exception e)
+                {
+                    _log.Error("Failed to publish a message.", e);
+                    // Invalidate current session.
+                    TryGetSession(session);
+                    return null;
+                }
+                finally
+                {
+                    session.DecRef();
                 }
             }
         }
@@ -209,38 +218,61 @@ namespace iFix.Crust.Fix44
         public void Dispose()
         {
             _cancellation.Cancel();
+            lock (_sessionInitMonitor)
             lock (_sessionMonitor)
             {
-                if (_session != null) _session.Dispose();
-                _session = null;
+                if (_session != null)
+                {
+                    _session.Dispose();
+                    _session = null;
+                }
             }
         }
 
-        // Returns fully initialized session that is NOT the same as 'old'
-        // (supposedly the old one is malfunctioning).
+        // Returns fully initialized session that is NOT the same as 'invalid'
+        // (supposedly that one is malfunctioning). Returns null if the current
+        // session is not initialized or if it's equal to the invalid.
         //
-        // Returns null if the object has been disposed of. Never throws.
-        // Disposes of the old session.
-        Session GetSession(Session old)
+        // Never returns null. Disposes of the invalid session.
+        Session TryGetSession(Session invalid)
         {
-            if (old != null) old.Dispose();
+            if (_cancellation.IsCancellationRequested) throw new ObjectDisposedException("DurableConnection");
+            if (invalid != null) invalid.Dispose();
             lock (_sessionMonitor)
             {
-                if (_session != old)
+                if (_session != null)
                 {
-                    if (_session != null) _session.IncRef();
-                    return _session;
+                    if (_session == invalid) _session = null;
+                    else _session.IncRef();
                 }
-                if (_session != null) _session.Dispose();
-                _session = null;
+                return _session;
+            }
+        }
+
+        // Returns fully initialized session that is NOT the same as 'invalid'
+        // (supposedly that one is malfunctioning). Initializes a new session if
+        // necessary.
+        //
+        // Throws if the object has been disposed of. Never returns null.
+        // Disposes of the invalid session.
+        Session GetSession(Session invalid)
+        {
+            Session current = TryGetSession(invalid);
+            if (current != null) return current;
+            lock (_sessionInitMonitor)
+            {
+                // Check if we managed to grab _sessionInitMonitor before anyone else.
+                current = TryGetSession(null);
+                if (current != null) return current;
                 while (true)
                 {
-                    if (_cancellation.IsCancellationRequested) return null;
+                    if (_cancellation.IsCancellationRequested) throw new ObjectDisposedException("DurableConnection");
                     try
                     {
-                        _session = new Session(_connector.CreateConnection(_cancellation.Token).Result, ++_sessionID);
-                        _session.IncRef();
-                        return _session;
+                        current = new Session(_connector.CreateConnection(_cancellation.Token).Result, ++_sessionID);
+                        current.IncRef();
+                        lock (_sessionMonitor) _session = current;
+                        return current;
                     }
                     catch (Exception e)
                     {

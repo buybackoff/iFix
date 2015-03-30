@@ -2,11 +2,17 @@
 
 REM Run this script from the root of iFix (the current directory should
 REM contain iFix.sln). It will build the whole solution and push new
-REM versions of iFix.Core, iFix.Mantle and iFix.Crust to nuget.org.
+REM versions of iFix.Common, iFix.Core, iFix.Mantle and iFix.Crust to nuget.org.
 
 call "%VS120COMNTOOLS%vsvars32.bat" || goto :error
 
 devenv /rebuild Release iFix.sln || goto :error
+
+cd Common || goto :error
+if exist *.nupkg (del *.nupkg || goto :error)
+nuget pack Common.csproj -IncludeReferencedProjects -Prop Configuration=Release || goto :error
+nuget push *.nupkg || goto :error
+cd .. || goto :error
 
 cd Core || goto :error
 if exist *.nupkg (del *.nupkg || goto :error)

@@ -1,4 +1,5 @@
-﻿using iFix.Core;
+﻿using iFix.Common;
+using iFix.Core;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -152,7 +153,7 @@ namespace iFix.Mantle
             {
                 T elem = new T();
                 FieldAcceptance res = elem.AcceptField(tag, value);
-                Debug.Assert(res != FieldAcceptance.AlreadySet);
+                Assert.True(res != FieldAcceptance.AlreadySet);
                 if (res == FieldAcceptance.Accepted) Add(elem);
                 return res;
             }
@@ -163,7 +164,7 @@ namespace iFix.Mantle
                 {
                     Add(new T());
                     res = this[Count - 1].AcceptField(tag, value);
-                    Debug.Assert(res == FieldAcceptance.Accepted);
+                    Assert.True(res == FieldAcceptance.Accepted, "res = {0}", res);
                 }
                 return res;
             }

@@ -51,6 +51,10 @@
     <Compile Include="Receiver.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Common\Common.csproj">
+      <Project>{1ba2b875-5457-49ed-84fc-4f98ac8449c2}</Project>
+      <Name>Common</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Core\Core.csproj">
       <Project>{964ec765-b436-4558-8494-d84efe81f4ff}</Project>
       <Name>Core</Name>

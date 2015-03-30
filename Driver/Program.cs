@@ -19,38 +19,30 @@ namespace iFix.Driver
                 var client = new Crust.Fix44.Client(
                     new Crust.Fix44.ClientConfig()
                     {
-                        HeartBtInt = 30,
                         Password = "7118",
-                        SenderCompID = "MU9019500002",
-                        TargetCompID = "MFIXTradeID",
-                        Account = "S01-00000F00",
-                        TradingSessionID = "TQBR",
-                        ClOrdIDPrefix = "BP14466/01#",
+                        SenderCompID = "MD9019500002",
+                        TargetCompID = "MFIXTradeIDCurr",
+                        Account = "MB9019501190",
+                        TradingSessionID = "CETS",
+                        // ClOrdIDPrefix = "BP14466/01#",
                         // PartyID = "BP14466",
                         // PartyIDSource = 'D',
                         // PartyRole = 3,
-                        RequestTimeoutSeconds = 0,
                     },
-                    new TcpConnector("194.84.44.1", 9120));
+                    // new TcpConnector("91.203.253.239", 39212));
+                    new TcpConnector("194.84.44.1", 9212));
                 var req = new NewOrderRequest()
                 {
-                    Symbol = "TGKA",
+                    Symbol = "USD000UTSTOM",
                     Side = Side.Buy,
                     Quantity = 1,
-                    OrderType = OrderType.Limit,
-                    Price = 0.0049m,
+                    OrderType = OrderType.Market,
                 };
-                var order = client.CreateOrder(req, (OrderStateChangeEvent e) =>
-                {
-                    _log.Info("OrderStateChangeEvent: {0}", e);
-                });
-                if (!order.Submit("Submit"))
-                    throw new Exception("Can't send the order");
-                if (!order.Replace("Replace", 2, 0.0049m))
-                    throw new Exception("Can't replace the order");
-                Thread.Sleep(1000);
-                if (!order.Cancel("Cancel"))
-                    throw new Exception("Can't cancel the order");
+                IOrderCtrl order = client.CreateOrder(req);
+                // Thread.Sleep(1000);
+                // order.Replace(2, 0.0049m);
+                // Thread.Sleep(1000);
+                // order.Cancel();
                 while (true) Thread.Sleep(1000);
             }
             catch (Exception e)

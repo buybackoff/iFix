@@ -1,4 +1,5 @@
-﻿using NLog;
+﻿using iFix.Common;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -39,7 +40,7 @@ namespace iFix.Core
         // Messages larger than maxMessageSize can't be received.
         public MessageReader(int maxMessageSize)
         {
-            Debug.Assert(maxMessageSize > 0);
+            Assert.True(maxMessageSize > 0, "maxMessageSize = {0}", maxMessageSize);
             _buf = new byte[maxMessageSize];
         }
 
@@ -57,14 +58,14 @@ namespace iFix.Core
         // underlying stream.
         public async Task<ArraySegment<byte>> ReadMessage(Stream strm, CancellationToken cancellationToken)
         {
-            Debug.Assert(strm != null);
+            Assert.True(strm != null);
             var trailerMatcher = new MessageTrailerMatcher();
             int messageEnd = trailerMatcher.FindTrailer(_buf, _startPos, _endPos);
             // Keep reading from the underlying stream until we find trailer.
             while (messageEnd == 0)
             {
                 EnsureBufferSpace();
-                Debug.Assert(_endPos < _buf.Length);
+                Assert.True(_endPos < _buf.Length, "_endPos = {0}, _buf.Length = {1}", _endPos, _buf.Length);
                 // TODO: NetworkStream doesn't really support cancellation. Figure out how to cancel.
                 int read = await strm.ReadAsync(_buf, _endPos, _buf.Length - _endPos, cancellationToken);
                 if (read <= 0)
