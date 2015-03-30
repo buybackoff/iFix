@@ -203,47 +203,67 @@ namespace iFix.Crust.Fix44
                 RaiseOrderEvent(order.Update(new OrderUpdate() { Status = OrderStatus.Finished }), null);
         }
 
-        void Cancel(IOrder order, NewOrderRequest request)
+        bool Cancel(IOrder order, NewOrderRequest request)
         {
-            if (order.Status != OrderStatus.Accepted && order.Status != OrderStatus.PartiallyFilled)
+            try
             {
-                _log.Info("Order is not in a cancelable state: {0}", order);
-                return;
+                if (order.Status != OrderStatus.Accepted && order.Status != OrderStatus.PartiallyFilled)
+                {
+                    _log.Info("Order is not in a cancelable state: {0}", order);
+                    return false;
+                }
+                if (order.IsPending)
+                {
+                    _log.Info("Can't cancel order with a pending request", order);
+                    return false;
+                }
+                Assert.NotNull(order.OrderID);
+                Mantle.Fix44.OrderCancelRequest msg = _messageBuilder.OrderCancelRequest(request, order.OrderID);
+                StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg), null);
+                return true;
             }
-            if (order.IsPending)
+            catch (Exception e)
             {
-                _log.Info("Can't cancel order with a pending request", order);
-                return;
+                _log.Error("Unexpected error while cancelling an order", e);
+                // Return true to be on the safe side. Maybe we sent something to the exchange.
+                return true;
             }
-            Assert.NotNull(order.OrderID);
-            Mantle.Fix44.OrderCancelRequest msg = _messageBuilder.OrderCancelRequest(request, order.OrderID);
-            StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg), null);
         }
 
-        void Replace(IOrder order, NewOrderRequest request, decimal quantity, decimal price)
+        bool Replace(IOrder order, NewOrderRequest request, decimal quantity, decimal price)
         {
-            if (order.Status != OrderStatus.Accepted)
+            try
             {
-                _log.Info("Order is not in a replacable state: {0}", order);
-                return;
+                if (order.Status != OrderStatus.Accepted)
+                {
+                    _log.Info("Order is not in a replacable state: {0}", order);
+                    return false;
+                }
+                if (order.IsPending)
+                {
+                    _log.Info("Can't replace order with a pending request", order);
+                    return false;
+                }
+                Assert.NotNull(order.OrderID);
+                Mantle.Fix44.OrderCancelReplaceRequest msg =
+                    _messageBuilder.OrderCancelReplaceRequest(request, order.OrderID, quantity, price);
+                StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg), null);
+                return true;
             }
-            if (order.IsPending)
+            catch (Exception e)
             {
-                _log.Info("Can't replace order with a pending request", order);
-                return;
+                _log.Error("Unexpected error while replacing an order", e);
+                // Return true to be on the safe side. Maybe we sent something to the exchange.
+                return true;
             }
-            Assert.NotNull(order.OrderID);
-            Mantle.Fix44.OrderCancelReplaceRequest msg =
-                _messageBuilder.OrderCancelReplaceRequest(request, order.OrderID, quantity, price);
-            StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg), null);
         }
 
-        void ReplaceOrCancel(IOrder order, NewOrderRequest request, decimal quantity, decimal price)
+        bool ReplaceOrCancel(IOrder order, NewOrderRequest request, decimal quantity, decimal price)
         {
             if (order.Status == OrderStatus.Accepted)
-                Replace(order, request, quantity, price);
+                return Replace(order, request, quantity, price);
             else
-                Cancel(order, request);
+                return Cancel(order, request);
         }
 
         class OrderCtrl : IOrderCtrl
@@ -259,19 +279,25 @@ namespace iFix.Crust.Fix44
                 _request = request;
             }
 
-            public void Cancel()
+            public Task<bool> Cancel()
             {
-                _client._scheduler.Schedule(() => _client.Cancel(_order, _request));
+                var res = new Task<bool>(() => _client.Cancel(_order, _request));
+                _client._scheduler.Schedule(() => res.RunSynchronously());
+                return res;
             }
 
-            public void Replace(decimal quantity, decimal price)
+            public Task<bool> Replace(decimal quantity, decimal price)
             {
-                _client._scheduler.Schedule(() => _client.Replace(_order, _request, quantity, price));
+                var res = new Task<bool>(() => _client.Replace(_order, _request, quantity, price));
+                _client._scheduler.Schedule(() => res.RunSynchronously());
+                return res;
             }
 
-            public void ReplaceOrCancel(decimal quantity, decimal price)
+            public Task<bool> ReplaceOrCancel(decimal quantity, decimal price)
             {
-                _client._scheduler.Schedule(() => _client.ReplaceOrCancel(_order, _request, quantity, price));
+                var res = new Task<bool>(() => _client.ReplaceOrCancel(_order, _request, quantity, price));
+                _client._scheduler.Schedule(() => res.RunSynchronously());
+                return res;
             }
         }
     }

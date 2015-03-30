@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace iFix.Crust
 {
@@ -133,16 +134,18 @@ namespace iFix.Crust
     public interface IOrderCtrl
     {
         /// <summary>
-        /// Attempts to cancel an order.
+        /// Attempts to cancel an order. The result is true if a request was sent to
+        /// the exchange (but not necessarily processed yet), false otherwise.
         /// </summary>
-        void Cancel();
+        Task<bool> Cancel();
 
         /// <summary>
-        /// Attempts to replace an order.
+        /// Attempts to replace an order. The result is true if a request was sent to
+        /// the exchange (but not necessarily processed yet), false otherwise.
         ///
         /// Only limit orders without fills can be replaced.
         /// </summary>
-        void Replace(decimal quantity, decimal price);
+        Task<bool> Replace(decimal quantity, decimal price);
 
         /// <summary>
         /// Attempts to replace an order. If it's not possible due to the
@@ -152,7 +155,7 @@ namespace iFix.Crust
         ///   if (CanReplace()) Replace(quantity, price);
         ///   else Cancel();
         /// </summary>
-        void ReplaceOrCancel(decimal quantity, decimal price);
+        Task<bool> ReplaceOrCancel(decimal quantity, decimal price);
     }
 
     /// <summary>
