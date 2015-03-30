@@ -18,8 +18,34 @@ namespace iFix.Crust.Fix44
 
         public override string ToString()
         {
-            return String.Format("OrderID = {0}, Status = {1}, Price = {2}, LeftQuantity = {3}",
-                                 OrderID, Status, Price, LeftQuantity);
+            var res = new StringBuilder();
+            res.Append("(");
+            bool empty = true;
+            if (OrderID != null)
+            {
+                res.AppendFormat("OrderID = {0}", OrderID);
+                empty = false;
+            }
+            if (Status != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("Status = {0}", Status);
+                empty = false;
+            }
+            if (Price != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("Price = {0}", Price);
+                empty = false;
+            }
+            if (LeftQuantity != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("LeftQuantity = {0}", LeftQuantity);
+                empty = false;
+            }
+            res.Append(")");
+            return res.ToString();
         }
     }
 
@@ -30,7 +56,22 @@ namespace iFix.Crust.Fix44
 
         public override string ToString()
         {
-            return String.Format("SeqNum = {0}, ClOrdID = {1}", SeqNum, ClOrdID);
+            var res = new StringBuilder();
+            res.Append("(");
+            bool empty = true;
+            if (SeqNum != null)
+            {
+                res.AppendFormat("SeqNum = {0}", SeqNum);
+                empty = false;
+            }
+            if (ClOrdID != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("ClOrdID = {0}", ClOrdID);
+                empty = false;
+            }
+            res.Append(")");
+            return res.ToString();
         }
     }
 
@@ -90,7 +131,7 @@ namespace iFix.Crust.Fix44
             bool changed = false;
             if (update.OrderID != null && update.OrderID != _orderID)
             {
-                _log.Info("Updating OrderID from {0} to {1} for order {2}", _orderID, update.OrderID, _state);
+                _log.Info("Updating OrderID from {0} to {1} for order {2}", _orderID ?? "null", update.OrderID, _state);
                 // This will throw if we already have an order with the same ID.
                 _orders.AddOrder(update.OrderID, this);
                 if (_orderID != null) _orders.RemoveOrder(_orderID);
@@ -106,7 +147,7 @@ namespace iFix.Crust.Fix44
             {
                 // This can happen if we sent a New Order Request to the exchange and the
                 // reply doesn't contain OrderID.
-                _log.Warn("Removing order with unknown ID: ", _state);
+                _log.Warn("Removing order with unknown ID: ", this);
                 changed = true;
                 Finish();
             }
@@ -141,9 +182,35 @@ namespace iFix.Crust.Fix44
             _pending = null;
         }
 
+        public override string ToString()
+        {
+            var res = new StringBuilder();
+            res.Append("(");
+            bool empty = true;
+            if (_orderID != null)
+            {
+                res.AppendFormat("OrderID = {0}", _orderID);
+                empty = false;
+            }
+            if (_pending != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("Pending = {0}", _pending);
+                empty = false;
+            }
+            if (_state != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("State = {0}", _state);
+                empty = false;
+            }
+            res.Append(")");
+            return res.ToString();
+        }
+
         void Finish()
         {
-            _log.Info("Order with OrderID {0} has finished: {1}", _orderID, _state);
+            _log.Info("Order has finished: {0}", this);
             if (_pending != null)
             {
                 _orders.RemoveOp(_pending);
@@ -221,7 +288,7 @@ namespace iFix.Crust.Fix44
                 Assert.NotNull(order);
                 Assert.True(!_orders._bySeqNum.ContainsKey(id.SeqNum), "Duplicate SeqNum: {0}", id.SeqNum);
                 Assert.True(!_orders._byClOrdID.ContainsKey(id.ClOrdID), "Duplicate ClOrdID: {0}", id.ClOrdID);
-                _log.Info("Issued an OrderOP for order with OrderID {0}: {1}", order.OrderID, id);
+                _log.Info("Issued OrderOP {0} for order {1}", id, order);
                 _orders._bySeqNum.Add(id.SeqNum, order);
                 _orders._byClOrdID.Add(id.ClOrdID, order);
             }
@@ -231,7 +298,7 @@ namespace iFix.Crust.Fix44
                 Assert.NotNull(id);
                 Assert.NotNull(id.SeqNum);
                 Assert.NotNull(id.ClOrdID);
-                _log.Info("OrderOp has finished: {0}", id);
+                _log.Info("OrderOp {0} has finished", id);
                 Assert.True(_orders._byClOrdID.ContainsKey(id.ClOrdID), "Unknown ClOrdID: {0}", id.ClOrdID);
                 Assert.True(_orders._bySeqNum.Remove(id.SeqNum), "Unknown SeqNum: {0}", id.SeqNum);
                 Assert.True(_orders._byClOrdID.Remove(id.ClOrdID));

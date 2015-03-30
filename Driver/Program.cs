@@ -7,7 +7,12 @@ using NLog;
 
 namespace iFix.Driver
 {
-    // Equities.
+    class NameVal
+    {
+        string Name;
+        object Val;
+    }
+
     class Program
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
@@ -29,20 +34,22 @@ namespace iFix.Driver
                         // PartyIDSource = 'D',
                         // PartyRole = 3,
                     },
-                    // new TcpConnector("91.203.253.239", 39212));
-                    new TcpConnector("194.84.44.1", 9212));
+                    new TcpConnector("91.208.232.200", 9212));
+                Thread.Sleep(3000);
                 var req = new NewOrderRequest()
                 {
                     Symbol = "USD000UTSTOM",
                     Side = Side.Buy,
                     Quantity = 1,
-                    OrderType = OrderType.Market,
+                    OrderType = OrderType.Limit,
+                    Price = 49.5m,
+                    UserID = "MyOrder",
                 };
                 IOrderCtrl order = client.CreateOrder(req);
-                // Thread.Sleep(1000);
-                // order.Replace(2, 0.0049m);
-                // Thread.Sleep(1000);
-                // order.Cancel();
+                Thread.Sleep(1000);
+                order.Replace(2, 49.5m);
+                Thread.Sleep(1000);
+                order.Cancel();
                 while (true) Thread.Sleep(1000);
             }
             catch (Exception e)
@@ -118,7 +125,7 @@ namespace iFix.Driver
             res.SenderCompID.Value = "MD9019500001";
             res.TargetCompID.Value = "MFIXTradeIDCurr";
             res.MsgSeqNum.Value = _msgSeqNum++;
-            res.SendingTime.Value = DateTime.Now;
+            res.SendingTime.Value = DateTime.UtcNow;
             return res;
         }
 
@@ -157,7 +164,7 @@ namespace iFix.Driver
                         // order.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = "CETS" });
                         // order.Instrument.Symbol.Value = "USD000UTSTOM";
                         // order.Side.Value = '1';  // 1 = Buy, 2 = Sell
-                        // order.TransactTime.Value = DateTime.Now;
+                        // order.TransactTime.Value = DateTime.UtcNow;
                         // order.OrderQtyData.OrderQty.Value = 2;
                         // order.OrdType.Value = '2';  // 1 = Market, 2 = Limit
                         // order.Price.Value = 34.1m;
@@ -177,7 +184,7 @@ namespace iFix.Driver
                         // order.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = "CETS" });
                         // order.Instrument.Symbol.Value = "USD000UTSTOM";
                         // order.Side.Value = '1';  // 1 = Buy, 2 = Sell
-                        // order.TransactTime.Value = DateTime.Now;
+                        // order.TransactTime.Value = DateTime.UtcNow;
                         // order.OrderQty.Value = 1;
                         // order.OrdType.Value = '2';  // 1 = Market, 2 = Limit
                         // order.Price.Value = 34.15m;

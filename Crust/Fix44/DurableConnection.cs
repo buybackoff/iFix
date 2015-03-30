@@ -111,7 +111,7 @@ namespace iFix.Crust.Fix44
 
         public override string ToString()
         {
-            return String.Format("SessionID = {0}, SeqNum = {1}", SessionID, SeqNum);
+            return String.Format("(SessionID = {0}, SeqNum = {1})", SessionID, SeqNum);
         }
     }
 

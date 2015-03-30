@@ -25,7 +25,7 @@ namespace iFix.Mantle
     public interface IFields
     {
         // TODO(roman): it would be nice if Fields property gave us human readable field names
-        // in addition to tag numbers. Thes could be used by ToString().
+        // in addition to tag numbers. This could be used by ToString().
 
         // Fields in serialized form.
         IEnumerable<Field> Fields { get; }

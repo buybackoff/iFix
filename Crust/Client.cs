@@ -102,10 +102,12 @@ namespace iFix.Crust
         public override string ToString()
         {
             var res = new StringBuilder();
+            res.Append("(");
+            if (UserID != null) res.AppendFormat("UserID = ({0}), ", UserID);
             res.AppendFormat("Status = {0}", Status);
             res.AppendFormat(", LeftQuantity = {0}", LeftQuantity);
-            if (Price.HasValue)
-                res.AppendFormat(", Price = {0}", Price.Value);
+            if (Price.HasValue) res.AppendFormat(", Price = {0}", Price.Value);
+            res.Append(")");
             return res.ToString();
         }
 
@@ -199,7 +201,7 @@ namespace iFix.Crust
 
         public override string ToString()
         {
-            return String.Format("Symbol = {0}, Side = {1}, Quantity = {2}, Price = {3}",
+            return String.Format("(Symbol = {0}, Side = {1}, Quantity = {2}, Price = {3})",
                                  Symbol, Side, Quantity, Price);
         }
 
@@ -233,9 +235,22 @@ namespace iFix.Crust
 
         public override string ToString()
         {
-            string state = State == null ? "null" : String.Format("({0})", State);
-            string fill = Fill == null ? "null" : String.Format("({0})", Fill);
-            return String.Format("State = {0}, Fill = {1}", state, fill);
+            var res = new StringBuilder();
+            res.Append("(");
+            bool empty = true;
+            if (State != null)
+            {
+                res.AppendFormat("State = {0}", State);
+                empty = false;
+            }
+            if (Fill != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("Fill = {0}", Fill);
+                empty = false;
+            }
+            res.Append(")");
+            return res.ToString();
         }
 
         public object Clone()

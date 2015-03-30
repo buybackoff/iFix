@@ -123,15 +123,21 @@ namespace iFix.Crust.Fix44
         {
             if (order.Status == OrderStatus.TearingDown)
             {
-                _log.Warn("Order with OrderID {0} has been in status TearingDown for too long. Finishing it.", order.OrderID);
+                _log.Warn("Order has been in status TearingDown for too long. Finishing it. {0}", order);
                 RaiseOrderEvent(order.Update(new OrderUpdate() { Status = OrderStatus.Finished }), null);
             }
         }
 
-        OrderState UpdateOrder(string origOrderID, OrderUpdate update)
+        OrderState UpdateOrder(string origOrderID, OrderOpID op, OrderUpdate update)
         {
             IOrder order = _orders.FindByOrderID(update.OrderID) ?? _orders.FindByOrderID(origOrderID);
-            if (order == null) return null;
+            if (order == null)
+            {
+                order = _orders.FindByOpID(op);
+                // Only orders in status Created (a.k.a. orders withour OrderID) can be safely matched
+                // my ClOrdID.
+                if (order == null || order.OrderID != null) return null;
+            }
             OrderStatus oldStatus = order.Status;
             OrderState res = order.Update(update);
             if (order.Status == OrderStatus.TearingDown && order.Status != oldStatus && _cfg.RequestTimeout > TimeSpan.Zero)
@@ -143,12 +149,12 @@ namespace iFix.Crust.Fix44
 
         void OnMessage(IncomingMessage msg)
         {
-            _log.Info("Decoded incoming message: {0}", msg);
             if (msg == null) return;
+            _log.Info("Decoded incoming message: {0}", msg);
             if (msg.TestReqID != null)
                 _connection.Send(_messageBuilder.Heartbeat(msg.TestReqID));
-            RaiseOrderEvent(UpdateOrder(msg.OrigOrderID, msg.Order), msg.Fill.MakeFill());
-            // Finish a pending op, if there is one. Note that in can belong to a different
+            RaiseOrderEvent(UpdateOrder(msg.OrigOrderID, msg.Op, msg.Order), msg.Fill.MakeFill());
+            // Finish a pending op, if there is one. Note that can belong to a different
             // order than the one we just updated. The protocol doesn't allow this but our
             // code will work just fine if it happens.
             IOrder order = _orders.FindByOpID(msg.Op);
@@ -198,12 +204,12 @@ namespace iFix.Crust.Fix44
         {
             if (order.Status != OrderStatus.Accepted && order.Status != OrderStatus.PartiallyFilled)
             {
-                _log.Info("Can't cancel order with OrderID {0} in state {1}", order.OrderID, order.Status);
+                _log.Info("Order is not in a cancelable state: {0}", order);
                 return;
             }
             if (order.IsPending)
             {
-                _log.Info("Can't cancel order with OrderID {0} because it has a pending request", order.OrderID);
+                _log.Info("Can't cancel order with a pending request", order);
                 return;
             }
             Assert.NotNull(order.OrderID);
@@ -215,12 +221,12 @@ namespace iFix.Crust.Fix44
         {
             if (order.Status != OrderStatus.Accepted)
             {
-                _log.Info("Can't replace order with OrderID {0} in state {1}", order.OrderID, order.Status);
+                _log.Info("Order is not in a replacable state: {0}", order);
                 return;
             }
             if (order.IsPending)
             {
-                _log.Info("Can't replace order with OrderID {0} because it has a pending request", order.OrderID);
+                _log.Info("Can't replace order with a pending request", order);
                 return;
             }
             Assert.NotNull(order.OrderID);

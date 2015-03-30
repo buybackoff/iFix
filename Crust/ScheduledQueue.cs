@@ -14,7 +14,11 @@ namespace iFix.Crust
 
         public void Push(TValue value, DateTime when)
         {
-            lock (_monitor) _data.Push(when, value);
+            lock (_monitor)
+            {
+                _data.Push(when, value);
+                Monitor.PulseAll(_monitor);
+            }
         }
 
         // Returns false if cancelled, true otherwise.

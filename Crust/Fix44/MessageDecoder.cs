@@ -22,8 +22,34 @@ namespace iFix.Crust.Fix44
 
         public override string ToString()
         {
-            return String.Format("Symbol = {0}, Side = {1}, Quantity = {2}, Price = {3}",
-                                  Symbol, Side, Quantity, Price);
+            var res = new StringBuilder();
+            res.Append("(");
+            bool empty = true;
+            if (Symbol != null)
+            {
+                res.AppendFormat("Symbol = {0}", Symbol);
+                empty = false;
+            }
+            if (Side != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("Side = {0}", Side);
+                empty = false;
+            }
+            if (Quantity != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("Quantity = {0}", Quantity);
+                empty = false;
+            }
+            if (Price != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("Price = {0}", Price);
+                empty = false;
+            }
+            res.Append(")");
+            return res.ToString();
         }
     }
 
@@ -44,8 +70,40 @@ namespace iFix.Crust.Fix44
 
         public override string ToString()
         {
-            return String.Format("TestReqID = {0}, OrigOrderID = {1}, Op = ({2}), Order = ({3}), Fill = ({4})",
-                                 TestReqID, OrigOrderID, Op, Order, Fill);
+            var res = new StringBuilder();
+            res.Append("(");
+            bool empty = true;
+            if (TestReqID != null)
+            {
+                res.AppendFormat("TestReqID = {0}", TestReqID);
+                empty = false;
+            }
+            if (OrigOrderID != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("OrigOrderID = {0}", OrigOrderID);
+                empty = false;
+            }
+            if (Op != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("Op = {0}", Op);
+                empty = false;
+            }
+            if (Order != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("Order = {0}", Order);
+                empty = false;
+            }
+            if (Fill != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("Fill = {0}", Fill);
+                empty = false;
+            }
+            res.Append(")");
+            return res.ToString();
         }
     }
 
