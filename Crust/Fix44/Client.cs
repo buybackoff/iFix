@@ -123,7 +123,7 @@ namespace iFix.Crust.Fix44
         {
             if (order.Status == OrderStatus.TearingDown)
             {
-                _log.Warn("Order has been in status TearingDown for too long. Finishing it. {0}", order);
+                _log.Warn("Order has been in status TearingDown for too long. Finishing it: {0}", order);
                 RaiseOrderEvent(order.Update(new OrderUpdate() { Status = OrderStatus.Finished }), null);
             }
         }
@@ -165,8 +165,11 @@ namespace iFix.Crust.Fix44
         {
             IOrder order = _orders.FindByOpID(id);
             if (order == null) return;
+            _log.Warn("OrderOp {0} timed out for order {1}", id, order);
             RaiseOrderEvent(order.Update(new OrderUpdate() { Status = statusOnTimeout }), null);
-            order.FinishPending();
+            // The previus call to Update may have finished the Op, so we need to check
+            // whether it's still pending.
+            if (order.IsPending) order.FinishPending();
         }
 
         bool StoreOp(IOrder order, string clOrdID, DurableSeqNum seqNum, OrderStatus? statusOnTimeout)
