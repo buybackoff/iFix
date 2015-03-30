@@ -7,12 +7,6 @@ using NLog;
 
 namespace iFix.Driver
 {
-    class NameVal
-    {
-        string Name;
-        object Val;
-    }
-
     class Program
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
