@@ -333,6 +333,10 @@ namespace iFix.Crust
     {
         /// <summary>
         /// Fires when anything happens to one of the submitted orders.
+        /// The notifications are delivered from a single thread, the same one that is used
+        /// for all network IO. It's OK to call CreateOrder() or methods of IOrderCtrl in the
+        /// callback but it's not OK to block there. An attempt to call IOrderCtrl.Cancel().Result
+        /// (that is, to block until the cancel request is sent) will cause a deadlock.
         /// </summary>
         event Action<OrderEvent> OnOrderEvent;
 
