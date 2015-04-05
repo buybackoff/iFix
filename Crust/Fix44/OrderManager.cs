@@ -9,11 +9,17 @@ using System.Threading.Tasks;
 
 namespace iFix.Crust.Fix44
 {
+    // Modification for the order received from the exchange.
+    // Fields that are null are assumed to be unchanged.
     class OrderUpdate
     {
+        // If not null, this is the new OrderID assigned by the exchange.
         public string OrderID;
+        // If set, this is the new status.
         public OrderStatus? Status;
+        // If set, this is the new price.
         public decimal? Price;
+        // If set, this is the new quantity.
         public decimal? LeftQuantity;
 
         public override string ToString()
@@ -49,9 +55,12 @@ namespace iFix.Crust.Fix44
         }
     }
 
+    // Identifier of an operation (a.k.a. request) that we sent to the exchange.
     class OrderOpID
     {
+        // Not null.
         public DurableSeqNum SeqNum;
+        // Not null.
         public string ClOrdID;
 
         public override string ToString()
@@ -77,35 +86,68 @@ namespace iFix.Crust.Fix44
 
     interface IOrder
     {
+        // Null if status is Created. May be null if status is Finished. Not null otherwise.
         string OrderID { get; }
+
         OrderStatus Status { get; }
+
+        // Returns null if the state didn't change.
+        // Requires: update is not null and update.Status != Created.
         OrderState Update(OrderUpdate update);
+
+        // Is there a pending operation for the order? In other words, are we expecting an
+        // update from the exchange in the near future?
+        //
+        // If Status is Finished, IsPending is false.
         bool IsPending { get; }
+
+        // Requires: id is not null, Status is not Finished.
         void SetPending(OrderOpID id);
+
+        // Requires: IsPending is true.
         void FinishPending();
     }
 
+    // This is essentially three dictionaries:
+    //   1. OrderID -> Order.
+    //   2. ClOrdID -> Order.
+    //   3. DurableSeqNum -> Order.
+    //
+    // AddOrder() and RemoveOrder() operate on the first dictionary, while AddOp() and RemoveOp() operate
+    // on the second and the third.
     interface IOrderMap
     {
+        // Requires: oderID and order aren't null.
+        //
+        // If there is already an order with the same orderID (even if it's the
+        // same order), throws ArgumentException.
         void AddOrder(string orderID, IOrder order);
+
+        // Requires: orderID is not null and there is an order with the specified ID.
         void RemoveOrder(string orderID);
 
+        // Requires: order, id and its fields aren't null and there is no order
+        // with the same SeqNum or ClOrdID.
         void AddOp(OrderOpID id, IOrder order);
+
+        // Requires: id and its fields are not null and there is an order with the specified
+        // SeqNum and ClOrdID.
         void RemoveOp(OrderOpID id);
     }
 
+    // Our order on the exchange. Mirrors the state held on the exchange.
     class Order : IOrder
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
 
-        // Null if status is Created, not null otherwise.
+        // Null if status is Created. May be null if status is Finished. Not null otherwise.
         string _orderID = null;
         // If Status == Finished, _pending is null.
         OrderOpID _pending = null;
         // Not null.
-        OrderState _state;
+        readonly OrderState _state;
         // Not null.
-        IOrderMap _orders;
+        readonly IOrderMap _orders;
 
         public Order(IOrderMap orders, NewOrderRequest request)
         {
@@ -128,26 +170,39 @@ namespace iFix.Crust.Fix44
         public OrderState Update(OrderUpdate update)
         {
             Assert.True(Status != OrderStatus.Finished);
+            Assert.True(update.Status != OrderStatus.Created, "Invalid update {0} for order {1}", update, this);
             bool changed = false;
+            // Do we have a new OrderID assigned by the exchange?
             if (update.OrderID != null && update.OrderID != _orderID)
             {
                 _log.Info("Updating OrderID from {0} to {1} for order {2}", _orderID ?? "null", update.OrderID, _state);
-                // This will throw if we already have an order with the same ID.
+                // This will throw if we already have an order with the same ID. The update will be ignored.
                 _orders.AddOrder(update.OrderID, this);
                 if (_orderID != null) _orders.RemoveOrder(_orderID);
                 _orderID = update.OrderID;
             }
+            // Have the status changed?
             if (update.Status.HasValue && update.Status != Status)
             {
                 _state.Status = update.Status.Value;
                 changed = true;
                 if (Status == OrderStatus.Finished) Finish();
             }
-            if (Status != OrderStatus.Finished && _orderID == null)
+            // Orders that aren't Created or Finished must have OrderID.
+            if (Status != OrderStatus.Finished && Status != OrderStatus.Created && _orderID == null)
             {
                 // This can happen if we sent a New Order Request to the exchange and the
                 // reply doesn't contain OrderID.
                 _log.Warn("Removing order with unknown ID: ", this);
+                changed = true;
+                Finish();
+            }
+            // Orders in state Created can't have OrderID.
+            if (Status == OrderStatus.Created && _orderID != null)
+            {
+                // This can happen if we sent a New Order Request to the exchange and the
+                // reply doesn't contain order status.
+                _log.Warn("Removing order in unknown status: ", this);
                 changed = true;
                 Finish();
             }
@@ -242,6 +297,8 @@ namespace iFix.Crust.Fix44
             return res;
         }
 
+        // If id.SeqNum is specified, tries to find the associated order.
+        // The same for id.ClOrdID. If both are specified, verifies that the result is the same.
         public IOrder FindByOpID(OrderOpID id)
         {
             if (id == null) return null;
@@ -270,7 +327,11 @@ namespace iFix.Crust.Fix44
             public void AddOrder(string orderID, IOrder order)
             {
                 Assert.NotNull(orderID);
-                Assert.True(!_orders._byOrderID.ContainsKey(orderID), "Duplicate OrderID: {0}", orderID);
+                Assert.NotNull(order);
+                // This check can trigger if exchange gives us duplicate IDs, that's why
+                // it's ArgumentException and not an Assert.
+                if (_orders._byOrderID.ContainsKey(orderID))
+                    throw new ArgumentException(String.Format("Duplicate OrderID: {0}", orderID));
                 _orders._byOrderID.Add(orderID, order);
             }
 
@@ -299,8 +360,12 @@ namespace iFix.Crust.Fix44
                 Assert.NotNull(id.SeqNum);
                 Assert.NotNull(id.ClOrdID);
                 _log.Info("OrderOp {0} has finished", id);
-                Assert.True(_orders._byClOrdID.ContainsKey(id.ClOrdID), "Unknown ClOrdID: {0}", id.ClOrdID);
-                Assert.True(_orders._bySeqNum.Remove(id.SeqNum), "Unknown SeqNum: {0}", id.SeqNum);
+                IOrder bySeqNum = null;
+                IOrder byClOrdID = null;
+                Assert.True(_orders._bySeqNum.TryGetValue(id.SeqNum, out bySeqNum), "Unknown SeqNum: {0}", id.SeqNum);
+                Assert.True(_orders._byClOrdID.TryGetValue(id.ClOrdID, out byClOrdID), "Unknown ClOrdID: {0}", id.ClOrdID);
+                Assert.True(bySeqNum == byClOrdID, "Ambiguous OrderOpID: {0}", id);
+                Assert.True(_orders._bySeqNum.Remove(id.SeqNum));
                 Assert.True(_orders._byClOrdID.Remove(id.ClOrdID));
             }
         }
