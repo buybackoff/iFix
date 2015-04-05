@@ -151,7 +151,9 @@ namespace iFix.Crust.Fix44
                 res.Op.ClOrdID = msg.ClOrdID.Value;
             else
                 _log.Warn("OrderCancelReject is missing ClOrdID");
-            if (msg.CxlRejReason.HasValue && msg.CxlRejReason.Value == 1)
+            // 0: Too late to cancel.
+            // 1: Unknown order.
+            if (msg.CxlRejReason.HasValue && (msg.CxlRejReason.Value == 0 || msg.CxlRejReason.Value == 1))
                 res.Order.Status = OrderStatus.Finished;
             return res;
         }
