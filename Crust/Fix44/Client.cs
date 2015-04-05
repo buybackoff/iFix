@@ -74,6 +74,16 @@ namespace iFix.Crust.Fix44
         public TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
     }
 
+    // What should be done with the order if an attempt to replace it is rejected?
+    // Most notably, an attempt to replace an order is rejected if it's partially filled.
+    enum OnReplaceReject
+    {
+        // Cancel the order.
+        Cancel,
+        // Keep the order as is, essentially ignoring the replace request.
+        Keep,
+    }
+
     public class Client : IClient
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
@@ -135,16 +145,16 @@ namespace iFix.Crust.Fix44
 
         OrderState UpdateOrder(string origOrderID, OrderOpID op, OrderUpdate update)
         {
-            IOrder order = _orders.FindByOrderID(update.OrderID) ?? _orders.FindByOrderID(origOrderID);
-            if (order == null)
-            {
-                order = _orders.FindByOpID(op);
-                // Only orders in status Created (a.k.a. orders withour OrderID) can be safely matched
-                // my ClOrdID.
-                if (order == null || order.OrderID != null) return null;
-            }
+            // Match by OrderID happens on fills.
+            // Match by OrigOrderID happens on moves.
+            // Match by OrderOpID happens on order creation and when we are trying to cancel/move an
+            // order with unknown ID (Order Cancel Reject <9>).
+            IOrder order = _orders.FindByOrderID(update.OrderID) ?? _orders.FindByOrderID(origOrderID) ?? _orders.FindByOpID(op);
+            if (order == null) return null;
             OrderStatus oldStatus = order.Status;
             OrderState res = order.Update(update);
+            // If the order has transitioned to status TearingDown, schedule a check in RequestTimeout.
+            // If it's still TearingDown by then, we'll mark it as Finished.
             if (order.Status == OrderStatus.TearingDown && order.Status != oldStatus && _cfg.RequestTimeout > TimeSpan.Zero)
             {
                 _scheduler.Schedule(() => TryTearDown(order), DateTime.UtcNow + _cfg.RequestTimeout);
@@ -212,14 +222,14 @@ namespace iFix.Crust.Fix44
         {
             try
             {
-                if (order.Status != OrderStatus.Accepted && order.Status != OrderStatus.PartiallyFilled)
-                {
-                    _log.Info("Order is not in a cancelable state: {0}", order);
-                    return false;
-                }
                 if (order.IsPending)
                 {
                     _log.Info("Can't cancel order with a pending request", order);
+                    return false;
+                }
+                if (order.Status != OrderStatus.Accepted && order.Status != OrderStatus.PartiallyFilled)
+                {
+                    _log.Info("Order is not in a cancelable state: {0}", order);
                     return false;
                 }
                 Assert.NotNull(order.OrderID);
@@ -236,23 +246,26 @@ namespace iFix.Crust.Fix44
             }
         }
 
-        bool Replace(IOrder order, NewOrderRequest request, decimal quantity, decimal price)
+        bool Replace(IOrder order, NewOrderRequest request, decimal quantity, decimal price, OnReplaceReject onReject)
         {
             try
             {
-                if (order.Status != OrderStatus.Accepted)
-                {
-                    _log.Info("Order is not in a replacable state: {0}", order);
-                    return false;
-                }
                 if (order.IsPending)
                 {
                     _log.Info("Can't replace order with a pending request", order);
                     return false;
                 }
+                // If OnReplaceReject is Keep, the order status should be Accepted.
+                // If it's Cancel, the order status may also be PartiallyFilled.
+                if (order.Status != OrderStatus.Accepted &&
+                    (onReject == OnReplaceReject.Keep || order.Status != OrderStatus.PartiallyFilled))
+                {
+                    _log.Info("Order is not in a replacable state with OnReject policy = {0}: {1}", onReject, order);
+                    return false;
+                }
                 Assert.NotNull(order.OrderID);
                 Mantle.Fix44.OrderCancelReplaceRequest msg =
-                    _messageBuilder.OrderCancelReplaceRequest(request, order.OrderID, quantity, price);
+                    _messageBuilder.OrderCancelReplaceRequest(request, order.OrderID, quantity, price, onReject);
                 StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg), null);
                 return true;
             }
@@ -263,14 +276,6 @@ namespace iFix.Crust.Fix44
                 // Return true to be on the safe side. Maybe we sent something to the exchange.
                 return true;
             }
-        }
-
-        bool ReplaceOrCancel(IOrder order, NewOrderRequest request, decimal quantity, decimal price)
-        {
-            if (order.Status == OrderStatus.Accepted)
-                return Replace(order, request, quantity, price);
-            else
-                return Cancel(order, request);
         }
 
         class OrderCtrl : IOrderCtrl
@@ -295,14 +300,14 @@ namespace iFix.Crust.Fix44
 
             public Task<bool> Replace(decimal quantity, decimal price)
             {
-                var res = new Task<bool>(() => _client.Replace(_order, _request, quantity, price));
+                var res = new Task<bool>(() => _client.Replace(_order, _request, quantity, price, OnReplaceReject.Keep));
                 _client._scheduler.Schedule(() => res.RunSynchronously());
                 return res;
             }
 
             public Task<bool> ReplaceOrCancel(decimal quantity, decimal price)
             {
-                var res = new Task<bool>(() => _client.ReplaceOrCancel(_order, _request, quantity, price));
+                var res = new Task<bool>(() => _client.Replace(_order, _request, quantity, price, OnReplaceReject.Cancel));
                 _client._scheduler.Schedule(() => res.RunSynchronously());
                 return res;
             }

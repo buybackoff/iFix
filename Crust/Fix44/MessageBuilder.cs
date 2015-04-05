@@ -70,7 +70,7 @@ namespace iFix.Crust.Fix44
         }
 
         public Mantle.Fix44.OrderCancelReplaceRequest OrderCancelReplaceRequest(
-            NewOrderRequest request, string orderID, decimal quantity, decimal price)
+            NewOrderRequest request, string orderID, decimal quantity, decimal price, OnReplaceReject onReject)
         {
             var res = new Mantle.Fix44.OrderCancelReplaceRequest() { StandardHeader = StandardHeader() };
             res.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
@@ -92,6 +92,8 @@ namespace iFix.Crust.Fix44
             res.OrdType.Value = request.OrderType == OrderType.Market ? '1' : '2';
             res.Side.Value = request.Side == Side.Buy ? '1' : '2';
             res.TransactTime.Value = res.StandardHeader.SendingTime.Value;
+            if (onReject == OnReplaceReject.Cancel)
+                res.CancelOrigOnReject.Value = true;
             return res;
         }
 
