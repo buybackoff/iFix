@@ -86,6 +86,13 @@ namespace iFix.Crust.Fix44
         }
     }
 
+    // Messages sent within a single FIX session have unique sequence numbers.
+    // However, two messages from different FIX sessions may have the same sequence numbers.
+    // DurableSeqNum is a pair of two numbers:
+    //   - SessionID is a unique session identifier within a process.
+    //   - SeqNum is a unique message identifier within a session.
+    //
+    // DurableSeqNum is used only for matching Reject messages.
     class DurableSeqNum : IEquatable<DurableSeqNum>
     {
         public long SessionID;

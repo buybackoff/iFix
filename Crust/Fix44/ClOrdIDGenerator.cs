@@ -12,12 +12,19 @@ namespace iFix.Crust.Fix44
         readonly Object _monitor = new Object();
         uint _last = 0;
 
+        // If prefix is not null, all IDs will start with it.
         public ClOrdIDGenerator(string prefix)
         {
             _prefix = prefix == null ? "" : prefix;
             _prefix += SessionID();
         }
 
+        // Generates a new unique ID. The format of the ID is prefix + session + seq.
+        //   - Prefix is specified in the constructor.
+        //   - Session is a 3-character-long string that is supposed to uniquely identify the process.
+        //     It's expected to be different if the binary is restarted on the same day. Uniqueness
+        //     across days is not required nor guaranteed.
+        //   - Seq is a 6-charecter-long string, which is different on every invocation of the method.
         public string GenerateID()
         {
             uint n;
@@ -33,7 +40,7 @@ namespace iFix.Crust.Fix44
             // The session ID is time of the startup measured in the number
             // of second since midnight. If two instances of the app
             // are launched within a second or less of each other, they'll
-            // have the same ID.
+            // have the same ID (which would be bad, but the circumstances are unlikely).
             uint sec = (uint)(t.Hour * 3600 + t.Minute * 60 + t.Second);
             // Note that sec has no more than 18 bits set. It's actually even less
             // than that, but we only care that it's not more than 18, so that it can

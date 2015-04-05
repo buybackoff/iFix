@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace iFix.Crust.Fix44
 {
+    // This class takes care of creating outgoing FIX messages.
     class MessageBuilder
     {
         readonly ClientConfig _cfg;

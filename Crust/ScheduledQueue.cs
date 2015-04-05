@@ -7,11 +7,14 @@ using System.Threading.Tasks;
 
 namespace iFix.Crust
 {
+    // A queue of items with their expected processing time.
+    // Thread-safe.
     class ScheduledQueue<TValue>
     {
-        PriorityQueue<DateTime, TValue> _data = new PriorityQueue<DateTime, TValue>();
-        object _monitor = new object();
+        readonly PriorityQueue<DateTime, TValue> _data = new PriorityQueue<DateTime, TValue>();
+        readonly object _monitor = new object();
 
+        // Adds an element to the queue. It'll be ready for processing at the specified time.
         public void Push(TValue value, DateTime when)
         {
             lock (_monitor)
@@ -21,6 +24,7 @@ namespace iFix.Crust
             }
         }
 
+        // Blocks until the head of the queue is ready for processing and pops it.
         // Returns false if cancelled, true otherwise.
         public bool Wait(out TValue value, CancellationToken cancel)
         {
@@ -41,18 +45,18 @@ namespace iFix.Crust
                     while (true)
                     {
                         if (cancelled) return false;
+                        // TimeSpan.FromMilliseconds(-1) is infinity for Monitor.Wait().
                         TimeSpan delay = TimeSpan.FromMilliseconds(-1);
-                        DateTime now = DateTime.UtcNow;
                         if (_data.Any())
                         {
-                            var front = _data.Front();
-                            if (front.Key <= now)
+                            DateTime now = DateTime.UtcNow;
+                            if (_data.Front().Key <= now)
                             {
-                                value = front.Value;
-                                _data.Pop();
+                                value = _data.Pop().Value;
                                 return true;
                             }
-                            delay = front.Key - now;
+                            delay = _data.Front().Key - now;
+                            // Monitor.Wait() can't handle values above TimeSpan.FromMilliseconds(Int32.MaxValue).
                             if (delay > TimeSpan.FromMilliseconds(Int32.MaxValue))
                                 delay = TimeSpan.FromMilliseconds(Int32.MaxValue);
                         }

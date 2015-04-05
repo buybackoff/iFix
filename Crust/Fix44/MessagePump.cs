@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 
 namespace iFix.Crust
 {
+    // MessagePump reads incoming messages in a loop and passes them to the specified callback.
     class MessagePump : IDisposable
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
@@ -18,6 +19,8 @@ namespace iFix.Crust
         readonly Action<Mantle.Fix44.IServerMessage, long> _onMessage;
         readonly Task _loop;
 
+        // Immediately starts reading messages from the connection and passing them to onMessage.
+        // Stops reading when Dispose() is called.
         public MessagePump(DurableConnection connection, Action<Mantle.Fix44.IServerMessage, long> onMessage)
         {
             _connection = connection;
@@ -25,6 +28,7 @@ namespace iFix.Crust
             _loop = ReceiveLoop();
         }
 
+        // Blocks until the reading stops.
         public void Dispose()
         {
             _log.Info("Disposing of iFix.Crust.MessagePump. This may take a while.");

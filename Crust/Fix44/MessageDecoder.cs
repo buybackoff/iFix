@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 
 namespace iFix.Crust.Fix44
 {
+    // Data received from the exchange that is relevant to fills.
+    // All fields are optional (may be null). They are extracted independently from incoming messages.
     class FillData
     {
         public string Symbol;
@@ -14,6 +16,8 @@ namespace iFix.Crust.Fix44
         public decimal? Quantity;
         public decimal? Price;
 
+        // If all necessary fields are set, returns a valid fill.
+        // Otherwise returns null.
         public Fill MakeFill()
         {
             if (Symbol == null || !Side.HasValue || !Quantity.HasValue || !Price.HasValue) return null;
@@ -53,7 +57,8 @@ namespace iFix.Crust.Fix44
         }
     }
 
-    // All fields may be null.
+    // Data received from the exchange that is relevant to us.
+    // All fields are optional (may be null). They are extracted independently from incoming messages.
     class IncomingMessage
     {
         // If set, we need to reply with a heartbeat.
@@ -64,6 +69,7 @@ namespace iFix.Crust.Fix44
         // has assigned to the order.
         public string OrigOrderID;
 
+        // These fields are new'ed to make setting them easier.
         public OrderOpID Op = new OrderOpID();
         public OrderUpdate Order = new OrderUpdate();
         public FillData Fill = new FillData();
@@ -107,12 +113,14 @@ namespace iFix.Crust.Fix44
         }
     }
 
+    // This class transforms an incoming FIX message into its distilled form.
     class MessageDecoder : Mantle.Fix44.IServerMessageVisitor<IncomingMessage>
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
 
         readonly long _sessionID;
 
+        // SessionID is DurableMessage.SessionID.
         public MessageDecoder(long sessionID)
         {
             _sessionID = sessionID;
