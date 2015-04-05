@@ -12,9 +12,9 @@ namespace iFix.Crust
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
 
-        ScheduledQueue<Action> _actions = new ScheduledQueue<Action>();
-        CancellationTokenSource _dispose = new CancellationTokenSource();
-        Task _loop;
+        readonly ScheduledQueue<Action> _actions = new ScheduledQueue<Action>();
+        readonly CancellationTokenSource _dispose = new CancellationTokenSource();
+        readonly Task _loop;
 
         public Scheduler()
         {
@@ -34,7 +34,10 @@ namespace iFix.Crust
 
         public void Dispose()
         {
+            _log.Info("Disposing of iFix.Crust.Scheduler");
             _dispose.Cancel();
+            try { _loop.Wait(); } catch { }
+            _log.Info("iFix.Crust.Scheduler successfully disposed of");
         }
 
         void ActionLoop()

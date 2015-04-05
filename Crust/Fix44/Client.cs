@@ -84,6 +84,8 @@ namespace iFix.Crust.Fix44
         readonly MessageBuilder _messageBuilder;
         readonly DurableConnection _connection;
         readonly MessagePump _messagePump;
+        // Set to true when Dispose() is called.
+        volatile bool _disposed = false;
 
         public Client(ClientConfig cfg, IConnector connector)
         {
@@ -114,9 +116,12 @@ namespace iFix.Crust.Fix44
 
         public void Dispose()
         {
+            _log.Info("Disposing of iFix.Crust.Client");
+            _disposed = true;
             try { _messagePump.Dispose(); } catch { }
             try { _scheduler.Dispose(); } catch { }
             try { _connection.Dispose(); } catch { }
+            _log.Info("iFix.Crust.Client successfully disposed of");
         }
 
         void TryTearDown(IOrder order)
@@ -224,7 +229,8 @@ namespace iFix.Crust.Fix44
             }
             catch (Exception e)
             {
-                _log.Error("Unexpected error while cancelling an order", e);
+                if (!_disposed)
+                    _log.Error("Unexpected error while cancelling an order", e);
                 // Return true to be on the safe side. Maybe we sent something to the exchange.
                 return true;
             }
@@ -252,7 +258,8 @@ namespace iFix.Crust.Fix44
             }
             catch (Exception e)
             {
-                _log.Error("Unexpected error while replacing an order", e);
+                if (!_disposed)
+                    _log.Error("Unexpected error while replacing an order", e);
                 // Return true to be on the safe side. Maybe we sent something to the exchange.
                 return true;
             }
