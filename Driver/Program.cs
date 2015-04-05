@@ -41,12 +41,14 @@ namespace iFix.Driver
                 };
                 IOrderCtrl order = client.CreateOrder(req);
                 Thread.Sleep(1000);
-                bool replaced = order.Replace(2, 49.5m).Result;
+                bool replaced = order.ReplaceOrCancel(2, 49.5m).Result;
                 _log.Info("Replaced: {0}", replaced);
                 Thread.Sleep(1000);
                 bool cancelled = order.Cancel().Result;
                 _log.Info("Cancelled: {0}", cancelled);
-                while (true) Thread.Sleep(1000);
+                Thread.Sleep(1000);
+                client.Dispose();
+                // while (true) Thread.Sleep(1000);
             }
             catch (Exception e)
             {
