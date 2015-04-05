@@ -13,25 +13,27 @@ namespace iFix.Crust
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
 
-        CancellationTokenSource _dispose = new CancellationTokenSource();
-        DurableConnection _connection;
-        Action<Mantle.Fix44.IServerMessage, long> _onMessage;
-        Task _loop;
+        readonly CancellationTokenSource _dispose = new CancellationTokenSource();
+        readonly DurableConnection _connection;
+        readonly Action<Mantle.Fix44.IServerMessage, long> _onMessage;
+        readonly Task _loop;
 
         public MessagePump(DurableConnection connection, Action<Mantle.Fix44.IServerMessage, long> onMessage)
         {
             _connection = connection;
             _onMessage = onMessage;
-            _loop = new Task(ReceiveLoop);
-            _loop.Start();
+            _loop = ReceiveLoop();
         }
 
         public void Dispose()
         {
+            _log.Info("Disposing of iFix.Crust.MessagePump. This may take a while.");
             _dispose.Cancel();
+            try { _loop.Wait(); } catch { }
+            _log.Info("iFix.Crust.MessagePump successfully disposed of");
         }
 
-        async void ReceiveLoop()
+        async Task ReceiveLoop()
         {
             while (!_dispose.IsCancellationRequested)
             {
