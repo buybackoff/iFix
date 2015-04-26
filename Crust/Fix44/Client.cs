@@ -99,8 +99,6 @@ namespace iFix.Crust.Fix44
 
         public Client(ClientConfig cfg, IConnector connector)
         {
-            // Add a no-op subscriber to make OnOrderEvent non-null.
-            OnOrderEvent += e => { };
             _cfg = cfg;
             _messageBuilder = new MessageBuilder(cfg);
             _connection = new DurableConnection(new InitializingConnector(connector, (session, cancel) =>
@@ -205,7 +203,8 @@ namespace iFix.Crust.Fix44
             {
                 var e = new OrderEvent() { State = state, Fill = fill };
                 _log.Info("Publishing OrderEvent: {0}", e);
-                OnOrderEvent(e);
+                Action<OrderEvent> action = Volatile.Read(ref OnOrderEvent);
+                if (action != null) action(e);
             }
         }
 
