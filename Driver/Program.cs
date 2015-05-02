@@ -36,19 +36,25 @@ namespace iFix.Driver
                     Side = Side.Buy,
                     Quantity = 1,
                     OrderType = OrderType.Limit,
-                    Price = 49.5m,
+                    Price = 57.9m,
                     UserID = "MyOrder",
                 };
-                IOrderCtrl order = client.CreateOrder(req);
-                Thread.Sleep(1000);
-                bool replaced = order.ReplaceOrCancel(2, 49.5m).Result;
-                _log.Info("Replaced: {0}", replaced);
-                Thread.Sleep(1000);
-                bool cancelled = order.Cancel().Result;
-                _log.Info("Cancelled: {0}", cancelled);
-                Thread.Sleep(1000);
+                IOrderCtrl order = client.CreateOrder(req).Result;
+                if (order == null)
+                {
+                    _log.Info("CreateOrder: null");
+                }
+                else
+                {
+                    Thread.Sleep(1000);
+                    bool replaced = order.ReplaceOrCancel(2, 57.85m).Result;
+                    _log.Info("Replaced: {0}", replaced);
+                    Thread.Sleep(1000);
+                    bool cancelled = order.Cancel().Result;
+                    _log.Info("Cancelled: {0}", cancelled);
+                    Thread.Sleep(1000);
+                }
                 client.Dispose();
-                // while (true) Thread.Sleep(1000);
             }
             catch (Exception e)
             {

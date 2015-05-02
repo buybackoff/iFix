@@ -114,12 +114,13 @@ namespace iFix.Crust.Fix44
 
         public event Action<OrderEvent> OnOrderEvent;
 
-        public IOrderCtrl CreateOrder(NewOrderRequest request)
+        public Task<IOrderCtrl> CreateOrder(NewOrderRequest request)
         {
             request = (NewOrderRequest)request.Clone();
             IOrder order = _orders.CreateOrder(request);
-            _scheduler.Schedule(() => Submit(order, request));
-            return new OrderCtrl(this, order, request);
+            var res = new Task<IOrderCtrl>(() => Submit(order, request) ? new OrderCtrl(this, order, request) : null);
+            _scheduler.Schedule(() => res.RunSynchronously());
+            return res;
         }
 
         public void Dispose()
@@ -185,16 +186,14 @@ namespace iFix.Crust.Fix44
             if (order.IsPending) order.FinishPending();
         }
 
-        bool StoreOp(IOrder order, string clOrdID, DurableSeqNum seqNum, OrderStatus? statusOnTimeout)
+        OrderOpID StoreOp(IOrder order, string clOrdID, DurableSeqNum seqNum)
         {
             Assert.NotNull(order);
             Assert.NotNull(clOrdID);
-            if (seqNum == null) return false;  // Didn't sent the request to the exchange.
+            if (seqNum == null) return null;  // Didn't sent the request to the exchange.
             var id = new OrderOpID() { SeqNum = seqNum, ClOrdID = clOrdID };
             order.SetPending(id);
-            if (_cfg.RequestTimeout > TimeSpan.Zero)
-                _scheduler.Schedule(() => TryTimeout(id, statusOnTimeout), DateTime.UtcNow + _cfg.RequestTimeout);
-            return true;
+            return id;
         }
 
         void RaiseOrderEvent(OrderState state, Fill fill)
@@ -208,13 +207,20 @@ namespace iFix.Crust.Fix44
             }
         }
 
-        void Submit(IOrder order, NewOrderRequest request)
+        bool Submit(IOrder order, NewOrderRequest request)
         {
             Assert.True(!order.IsPending);
             Assert.True(order.Status == OrderStatus.Created, "Status = {0}", order.Status);
             Mantle.Fix44.NewOrderSingle msg = _messageBuilder.NewOrderSingle(request);
-            if (!StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg), OrderStatus.Finished))
+            OrderOpID id = StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg));
+            if (id == null)
+            {
                 RaiseOrderEvent(order.Update(new OrderUpdate() { Status = OrderStatus.Finished }), null);
+                return false;
+            }
+            if (_cfg.RequestTimeout > TimeSpan.Zero)
+                _scheduler.Schedule(() => TryTimeout(id, OrderStatus.Finished), DateTime.UtcNow + _cfg.RequestTimeout);
+            return true;
         }
 
         bool Cancel(IOrder order, NewOrderRequest request)
@@ -233,15 +239,13 @@ namespace iFix.Crust.Fix44
                 }
                 Assert.NotNull(order.OrderID);
                 Mantle.Fix44.OrderCancelRequest msg = _messageBuilder.OrderCancelRequest(request, order.OrderID);
-                StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg), null);
-                return true;
+                return StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg)) != null;
             }
             catch (Exception e)
             {
                 if (!_disposed)
                     _log.Error("Unexpected error while cancelling an order", e);
-                // Return true to be on the safe side. Maybe we sent something to the exchange.
-                return true;
+                return false;
             }
         }
 
@@ -265,15 +269,13 @@ namespace iFix.Crust.Fix44
                 Assert.NotNull(order.OrderID);
                 Mantle.Fix44.OrderCancelReplaceRequest msg =
                     _messageBuilder.OrderCancelReplaceRequest(request, order.OrderID, quantity, price, onReject);
-                StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg), null);
-                return true;
+                return StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg)) != null;
             }
             catch (Exception e)
             {
                 if (!_disposed)
                     _log.Error("Unexpected error while replacing an order", e);
-                // Return true to be on the safe side. Maybe we sent something to the exchange.
-                return true;
+                return false;
             }
         }
 

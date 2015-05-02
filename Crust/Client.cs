@@ -343,21 +343,25 @@ namespace iFix.Crust
         /// <summary>
         /// Creates a new order.
         ///
-        /// The initial state of the order is defined as follows:
+        /// The task holds null if we were unable to send the request to place the order. In this case
+        /// OnOrderEvent is fired once for the order with Status = Finished (this happens before the
+        /// task finishes).
+        ///
+        /// Otherwise the task completes immediately after the request is sent and usually before
+        /// the response from the exchange is received. The initial state of the order is defined
+        /// as follows:
         ///   UserID = request.UserID
         ///   Status = OrderStatus.Created
         ///   LeftQuantity = request.Quantity
         ///   Price = request.Price
         ///
-        /// Action onChange is called whenever the state of the order changes or a request issued
-        /// through IOrderCtrl completes. It shall not be called synchronously from any methods of
-        /// IClient or IOrderCtrl. All change notifications coming from the same IClient object
-        /// are serialized, even the ones that belong to different orders.
+        /// OnOrderEvent will fire whenever the state of the order changes. It shall not be called
+        /// synchronously from any methods of IClient or IOrderCtrl. All change notifications coming
+        /// from the same IClient object are serialized, even the ones that belong to different orders.
         ///
-        /// The order is sent to the exchange asynchronously. The events for it may be generated for
-        /// it even before CreateOrder returns. However, they will not be delivered from the same
-        /// thread.
+        /// The order is sent to the exchange asynchronously. The events for it may be generated
+        /// before the task finishes and even before CreateOrder returns.
         /// </summary>
-        IOrderCtrl CreateOrder(NewOrderRequest request);
+        Task<IOrderCtrl> CreateOrder(NewOrderRequest request);
     }
 }
