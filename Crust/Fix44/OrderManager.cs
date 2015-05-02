@@ -284,6 +284,7 @@ namespace iFix.Crust.Fix44
         Dictionary<string, IOrder> _byClOrdID = new Dictionary<string, IOrder>();
         Dictionary<string, IOrder> _byOrderID = new Dictionary<string, IOrder>();
 
+        // This method is thread-safe. It's logically const.
         public IOrder CreateOrder(NewOrderRequest request)
         {
             return new Order(new OrderMap(this), request);
