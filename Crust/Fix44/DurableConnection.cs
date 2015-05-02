@@ -166,7 +166,7 @@ namespace iFix.Crust.Fix44
             Session session = null;
             while (true)
             {
-                session = GetSession(session);
+                session = await Task.Run(() => GetSession(session));
                 try
                 {
                     try
@@ -196,7 +196,7 @@ namespace iFix.Crust.Fix44
                 Session session = TryGetSession(null);
                 if (session == null)
                 {
-                    _log.Error("Unable to publish a messge: not connected.");
+                    _log.Warn("Unable to publish a messge: not connected.");
                     return null;
                 }
                 try
