@@ -186,14 +186,16 @@ namespace iFix.Crust.Fix44
             if (order.IsPending) order.FinishPending();
         }
 
-        OrderOpID StoreOp(IOrder order, string clOrdID, DurableSeqNum seqNum)
+        bool StoreOp(IOrder order, string clOrdID, DurableSeqNum seqNum, OrderStatus? statusOnTimeout)
         {
             Assert.NotNull(order);
             Assert.NotNull(clOrdID);
-            if (seqNum == null) return null;  // Didn't sent the request to the exchange.
+            if (seqNum == null) return false;  // Didn't sent the request to the exchange.
             var id = new OrderOpID() { SeqNum = seqNum, ClOrdID = clOrdID };
             order.SetPending(id);
-            return id;
+            if (_cfg.RequestTimeout > TimeSpan.Zero)
+                _scheduler.Schedule(() => TryTimeout(id, statusOnTimeout), DateTime.UtcNow + _cfg.RequestTimeout);
+            return true;
         }
 
         void RaiseOrderEvent(OrderState state, Fill fill)
@@ -212,15 +214,11 @@ namespace iFix.Crust.Fix44
             Assert.True(!order.IsPending);
             Assert.True(order.Status == OrderStatus.Created, "Status = {0}", order.Status);
             Mantle.Fix44.NewOrderSingle msg = _messageBuilder.NewOrderSingle(request);
-            OrderOpID id = StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg));
-            if (id == null)
-            {
-                RaiseOrderEvent(order.Update(new OrderUpdate() { Status = OrderStatus.Finished }), null);
-                return false;
-            }
-            if (_cfg.RequestTimeout > TimeSpan.Zero)
-                _scheduler.Schedule(() => TryTimeout(id, OrderStatus.Finished), DateTime.UtcNow + _cfg.RequestTimeout);
-            return true;
+            if (StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg), OrderStatus.Finished)) return true;
+            // We were unable to send a new order request to the exchange.
+            // Notify the caller that the order is finished.
+            RaiseOrderEvent(order.Update(new OrderUpdate() { Status = OrderStatus.Finished }), null);
+            return false;
         }
 
         bool Cancel(IOrder order, NewOrderRequest request)
@@ -239,7 +237,7 @@ namespace iFix.Crust.Fix44
                 }
                 Assert.NotNull(order.OrderID);
                 Mantle.Fix44.OrderCancelRequest msg = _messageBuilder.OrderCancelRequest(request, order.OrderID);
-                return StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg)) != null;
+                return StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg), null);
             }
             catch (Exception e)
             {
@@ -269,7 +267,7 @@ namespace iFix.Crust.Fix44
                 Assert.NotNull(order.OrderID);
                 Mantle.Fix44.OrderCancelReplaceRequest msg =
                     _messageBuilder.OrderCancelReplaceRequest(request, order.OrderID, quantity, price, onReject);
-                return StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg)) != null;
+                return StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg), null);
             }
             catch (Exception e)
             {
