@@ -23,8 +23,34 @@ namespace iFix.Crust.Fix44
             var res = new Mantle.Fix44.Logon() { StandardHeader = StandardHeader() };
             res.EncryptMethod.Value = 0;
             res.HeartBtInt.Value = _cfg.HeartBtInt;
+            if (_cfg.Username != null) res.Username.Value = _cfg.Username;
             res.Password.Value = _cfg.Password;
             res.ResetSeqNumFlag.Value = true;
+            return res;
+        }
+
+        public Mantle.Fix44.MarketDataRequest[] MarketDataRequest(string symbol)
+        {
+            // We need to request a snapshot of bids ('0'), a snapshot of asks ('1'), and live trades ('2').
+            // OKcoin doesn't allow all three to be sent in a single message. Thus we send one message
+            // with MDEntryTypes = {'0', '1'} and then another one with MDEntryTypes = {'2'}.
+            char[][] mdEntryTypes = { new[] { '0', '1' }, new[] { '2' } };
+            Mantle.Fix44.MarketDataRequest[] res = new Mantle.Fix44.MarketDataRequest[mdEntryTypes.Length];
+            for (int i = 0; i != res.Length; ++i)
+            {
+                res[i] = new Mantle.Fix44.MarketDataRequest() { StandardHeader = StandardHeader() };
+                var instrument = new Mantle.Fix44.Instrument();
+                instrument.Symbol.Value = symbol;
+                res[i].RelatedSym.Add(instrument);
+                res[i].MDReqID.Value = Guid.NewGuid().ToString();
+                res[i].SubscriptionRequestType.Value = '1';
+                res[i].MarketDepth.Value = 0;
+                res[i].MDUpdateType.Value = 1;
+                foreach (char c in mdEntryTypes[i])
+                {
+                    res[i].MDEntryTypes.Add(new Mantle.Fix44.MDEntryType() { Value = c });
+                }
+            }
             return res;
         }
 
@@ -32,6 +58,8 @@ namespace iFix.Crust.Fix44
         {
             var res = new Mantle.Fix44.Heartbeat() { StandardHeader = StandardHeader() };
             res.TestReqID.Value = testReqID;
+            if (_cfg.Username != null) res.Username.Value = _cfg.Username;
+            res.Password.Value = _cfg.Password;
             return res;
         }
 
@@ -48,7 +76,8 @@ namespace iFix.Crust.Fix44
                 party.PartyRole.Value = _cfg.PartyRole;
                 res.PartyGroup.Add(party);
             }
-            res.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = _cfg.TradingSessionID });
+            if (_cfg.TradingSessionID != null)
+                res.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = _cfg.TradingSessionID });
             res.Instrument.Symbol.Value = request.Symbol;
             res.Side.Value = request.Side == Side.Buy ? '1' : '2';
             res.TransactTime.Value = res.StandardHeader.SendingTime.Value;
@@ -89,7 +118,8 @@ namespace iFix.Crust.Fix44
             res.Instrument.Symbol.Value = request.Symbol;
             res.Price.Value = price;
             res.OrderQty.Value = quantity;
-            res.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = _cfg.TradingSessionID });
+            if (_cfg.TradingSessionID != null)
+                res.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = _cfg.TradingSessionID });
             res.OrdType.Value = request.OrderType == OrderType.Market ? '1' : '2';
             res.Side.Value = request.Side == Side.Buy ? '1' : '2';
             res.TransactTime.Value = res.StandardHeader.SendingTime.Value;

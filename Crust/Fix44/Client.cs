@@ -24,7 +24,11 @@ namespace iFix.Crust.Fix44
         /// </summary>
         public int HeartBtInt = 30;
         /// <summary>
-        /// Logon field.
+        /// Logon field. Can be null.
+        /// </summary>
+        public string Username;
+        /// <summary>
+        /// Logon field. Can't be null.
         /// </summary>
         public string Password;
 
@@ -42,7 +46,7 @@ namespace iFix.Crust.Fix44
         /// </summary>
         public string Account;
         /// <summary>
-        /// Common field for posting, changing and cancelling orders.
+        /// Common field for posting, changing and cancelling orders. May be null.
         /// </summary>
         public string TradingSessionID;
         /// <summary>
@@ -72,6 +76,11 @@ namespace iFix.Crust.Fix44
         /// Recommended value: 30 seconds.
         /// </summary>
         public TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
+
+        /// <summary>
+        /// Request market data for the specified symbols.
+        /// </summary>
+        public List<string> MarketDataSymbols = new List<string>();
     }
 
     // What should be done with the order if an attempt to replace it is rejected?
@@ -106,6 +115,9 @@ namespace iFix.Crust.Fix44
                 session.Send(_messageBuilder.Logon());
                 if (!(session.Receive(cancel).Result is Mantle.Fix44.Logon))
                     throw new UnexpectedMessageReceived("Expected Logon");
+                foreach (string symbol in _cfg.MarketDataSymbols)
+                    foreach (var msg in _messageBuilder.MarketDataRequest(symbol))
+                        session.Send(msg);
             }));
             _messagePump = new MessagePump(
                 _connection,

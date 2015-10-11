@@ -52,6 +52,11 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 141; } }
     }
 
+    public class Username : StringField
+    {
+        protected override int Tag { get { return 553; } }
+    }
+
     public class Password : StringField
     {
         protected override int Tag { get { return 554; } }
@@ -222,6 +227,31 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 102; } }
     }
 
+    public class MDReqID : StringField
+    {
+        protected override int Tag { get { return 262; } }
+    }
+
+    public class SubscriptionRequestType : CharField
+    {
+        protected override int Tag { get { return 263; } }
+    }
+
+    public class MarketDepth : IntField
+    {
+        protected override int Tag { get { return 264; } }
+    }
+
+    public class MDUpdateType : IntField
+    {
+        protected override int Tag { get { return 265; } }
+    }
+
+    public class MDEntryType : CharField
+    {
+        protected override int Tag { get { return 269; } }
+    }
+
     // Component blocks: http://www.onixs.biz/fix-dictionary/4.4/#ComponentBlocks.
 
     // BeginString, BodyLength and MsgType are intentionally missing.
@@ -287,5 +317,15 @@ namespace iFix.Mantle.Fix44
     public class PartyGroup : FieldGroup<Party>
     {
         protected override int GroupSizeTag { get { return 453; } }
+    }
+
+    public class RelatedSym : FieldGroup<Instrument>
+    {
+        protected override int GroupSizeTag { get { return 146; } }
+    }
+
+    public class MDEntryTypes : FieldGroup<MDEntryType>
+    {
+        protected override int GroupSizeTag { get { return 267; } }
     }
 }

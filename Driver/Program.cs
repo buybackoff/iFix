@@ -4,9 +4,48 @@ using iFix.Crust;
 using System.Collections.Generic;
 using System.Threading;
 using NLog;
+using System.Security.Cryptography.X509Certificates;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Text;
+using System.IO;
 
 namespace iFix.Driver
 {
+    // OKcoin test.
+    class Program
+    {
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
+        public static void Main(string[] args)
+        {
+            try
+            {
+                var client = new Crust.Fix44.Client(
+                    new Crust.Fix44.ClientConfig()
+                    {
+                        Username = "fceafd70-c1bf-4990-b63e-57fa500e8b0d",
+                        Password = "20732A896E6A14C538FF314D796ED3EA",
+                        SenderCompID = Guid.NewGuid().ToString(),
+                        TargetCompID = "OKSERVER",
+                        Account = "fceafd70-c1bf-4990-b63e-57fa500e8b0d,20732A896E6A14C538FF314D796ED3EA",
+                        MarketDataSymbols = new List<string> { "BTC/USD" }
+                    },
+                    new TcpConnector("api.okcoin.com", 9880, ConnectionType.Secure));
+                Thread.Sleep(5000);
+                // TODO: figure out why this hangs.
+                client.Dispose();
+            }
+            catch (Exception e)
+            {
+                _log.Fatal("Unexpected exception. Terminating.", e);
+            }
+        }
+    }
+
+    // MOEX test.
+    /*
     class Program
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
@@ -61,7 +100,8 @@ namespace iFix.Driver
                 _log.Fatal("Unexpected exception. Terminating.", e);
             }
         }
-    }
+    }*/
+
     // Currencies.
     /*
     class Program

@@ -63,6 +63,7 @@ namespace iFix.Mantle.Fix44
         T Visit(OrderCancelReplaceRequest msg);
         T Visit(OrderMassCancelRequest msg);
         T Visit(OrderStatusRequest msg);
+        T Visit(MarketDataRequest msg);
     }
 
     // FIX client can use this interface to handle all types of messages
@@ -118,6 +119,7 @@ namespace iFix.Mantle.Fix44
             if (msgType.Value == OrderMassCancelRequest.MsgType.Value) return new OrderMassCancelRequest();
             if (msgType.Value == OrderMassCancelReport.MsgType.Value) return new OrderMassCancelReport();
             if (msgType.Value == OrderStatusRequest.MsgType.Value) return new OrderStatusRequest();
+            if (msgType.Value == MarketDataRequest.MsgType.Value) return new MarketDataRequest();
             return null;
         }
 
@@ -144,6 +146,7 @@ namespace iFix.Mantle.Fix44
         public EncryptMethod EncryptMethod = new EncryptMethod();
         public HeartBtInt HeartBtInt = new HeartBtInt();
         public ResetSeqNumFlag ResetSeqNumFlag = new ResetSeqNumFlag();
+        public Username Username = new Username();
         public Password Password = new Password();
 
         public override IEnumerator<IFields> GetEnumerator()
@@ -153,6 +156,7 @@ namespace iFix.Mantle.Fix44
             yield return EncryptMethod;
             yield return HeartBtInt;
             yield return ResetSeqNumFlag;
+            yield return Username;
             yield return Password;
         }
 
@@ -196,12 +200,16 @@ namespace iFix.Mantle.Fix44
     {
         public static readonly MsgType MsgType = new MsgType { Value = "0" };
         public TestReqID TestReqID = new TestReqID();
+        public Username Username = new Username();
+        public Password Password = new Password();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
             yield return MsgType;
             yield return StandardHeader;
             yield return TestReqID;
+            yield return Username;
+            yield return Password;
         }
 
         public T Visit<T>(IClientMessageVisitor<T> visitor)
@@ -525,6 +533,35 @@ namespace iFix.Mantle.Fix44
             yield return StandardHeader;
             yield return ClOrdID;
             yield return OrderID;
+        }
+
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Market Data Request <V>: http://www.onixs.biz/fix-dictionary/4.4/msgType_V_86.html.
+    public class MarketDataRequest : Message, IClientMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "V" };
+        public RelatedSym RelatedSym = new RelatedSym();
+        public MDReqID MDReqID = new MDReqID();
+        public SubscriptionRequestType SubscriptionRequestType = new SubscriptionRequestType();
+        public MarketDepth MarketDepth = new MarketDepth();
+        public MDUpdateType MDUpdateType = new MDUpdateType();
+        public MDEntryTypes MDEntryTypes = new MDEntryTypes();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return RelatedSym;
+            yield return MDReqID;
+            yield return SubscriptionRequestType;
+            yield return MarketDepth;
+            yield return MDUpdateType;
+            yield return MDEntryTypes;
         }
 
         public T Visit<T>(IClientMessageVisitor<T> visitor)
