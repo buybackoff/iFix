@@ -22,14 +22,18 @@ namespace iFix.Driver
         {
             try
             {
+                // Copy-paste from https://www.okcoin.com/user/api.do.
+                // Anyone who knows your keys can send orders on your behalf. Don't leak them!
+                string apiKey = "FIXME";
+                string secretKey = "FIXME";
                 var client = new Crust.Fix44.Client(
                     new Crust.Fix44.ClientConfig()
                     {
-                        Username = "fceafd70-c1bf-4990-b63e-57fa500e8b0d",
-                        Password = "20732A896E6A14C538FF314D796ED3EA",
+                        Username = apiKey,
+                        Password = secretKey,
                         SenderCompID = Guid.NewGuid().ToString(),
                         TargetCompID = "OKSERVER",
-                        Account = "fceafd70-c1bf-4990-b63e-57fa500e8b0d,20732A896E6A14C538FF314D796ED3EA",
+                        Account = String.Format("{0},{1}", apiKey, secretKey),
                         MarketDataSymbols = new List<string> { "BTC/USD" }
                     },
                     new TcpConnector("api.okcoin.com", 9880, ConnectionType.Secure));
