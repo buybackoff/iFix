@@ -73,43 +73,31 @@ namespace iFix.Crust.Fix44
         public OrderOpID Op = new OrderOpID();
         public OrderUpdate Order = new OrderUpdate();
         public FillData Fill = new FillData();
+        public MarketData MarketData = new MarketData();
 
         public override string ToString()
         {
             var res = new StringBuilder();
             res.Append("(");
-            bool empty = true;
-            if (TestReqID != null)
-            {
-                res.AppendFormat("TestReqID = {0}", TestReqID);
-                empty = false;
-            }
-            if (OrigOrderID != null)
-            {
-                if (!empty) res.Append(", ");
-                res.AppendFormat("OrigOrderID = {0}", OrigOrderID);
-                empty = false;
-            }
-            if (Op != null)
-            {
-                if (!empty) res.Append(", ");
-                res.AppendFormat("Op = {0}", Op);
-                empty = false;
-            }
-            if (Order != null)
-            {
-                if (!empty) res.Append(", ");
-                res.AppendFormat("Order = {0}", Order);
-                empty = false;
-            }
-            if (Fill != null)
-            {
-                if (!empty) res.Append(", ");
-                res.AppendFormat("Fill = {0}", Fill);
-                empty = false;
-            }
+            bool comma = false;
+            comma = Append(res, comma, TestReqID, "TestReqID");
+            comma = Append(res, comma, OrigOrderID, "OrigOrderID");
+            comma = Append(res, comma, Op, "Op");
+            comma = Append(res, comma, Order, "Order");
+            comma = Append(res, comma, Fill, "Fill");
+            comma = Append(res, comma, MarketData, "MarketData");
             res.Append(")");
             return res.ToString();
+        }
+
+        static bool Append(StringBuilder buf, bool comma, object obj, string name)
+        {
+            if (obj == null) return comma;
+            string val = obj.ToString();
+            if (val == "()" && obj.GetType() != typeof(String)) return comma;
+            if (comma) buf.Append(", ");
+            buf.AppendFormat("{0} = {1}", name, val);
+            return true;
         }
     }
 
@@ -218,6 +206,163 @@ namespace iFix.Crust.Fix44
             if (msg.LastPx.HasValue && msg.LastPx.Value > 0)
                 res.Fill.Price = msg.LastPx.Value;
             return res;
+        }
+
+        public IncomingMessage Visit(Mantle.Fix44.MarketDataResponse msg)
+        {
+            var res = new IncomingMessage();
+            if (!msg.OrigTime.HasValue)
+            {
+                _log.Warn("MarketDataResponse is missing OrigTime field: {0}", msg);
+                return null;
+            }
+            res.MarketData.ServerTime = msg.OrigTime.Value;
+            if (!msg.Instrument.Symbol.HasValue)
+            {
+                _log.Warn("MarketDataResponse is missing Symbol field: {0}", msg);
+                return null;
+            }
+            res.MarketData.Symbol = msg.Instrument.Symbol.Value;
+            foreach (Mantle.Fix44.MDEntry entry in msg.MDEntries)
+            {
+                MarketOrder order;
+                string error;
+                switch (MakeOrder(entry, out order, out error))
+                {
+                    case MDEntryType.Invalid:
+                        _log.Warn("{0}: {1}", error, msg);
+                        break;
+                    case MDEntryType.Order:
+                        if (res.MarketData.Snapshot == null)
+                            res.MarketData.Snapshot = new List<MarketOrder>();
+                        res.MarketData.Snapshot.Add(order);
+                        break;
+                    case MDEntryType.Trade:
+                        if (res.MarketData.Trades == null)
+                            res.MarketData.Trades = new List<MarketOrder>();
+                        res.MarketData.Trades.Add(order);
+                        break;
+                }
+            }
+            return res;
+        }
+
+        public IncomingMessage Visit(Mantle.Fix44.MarketDataIncrementalRefresh msg)
+        {
+            var res = new IncomingMessage();
+            if (!msg.Instrument.Symbol.HasValue)
+            {
+                _log.Warn("MarketDataResponse is missing Symbol field: {0}", msg);
+                return null;
+            }
+            res.MarketData.Symbol = msg.Instrument.Symbol.Value;
+            foreach (Mantle.Fix44.MDEntry entry in msg.MDEntries)
+            {
+                MarketOrder order;
+                string error;
+                switch (MakeOrder(entry, out order, out error))
+                {
+                    case MDEntryType.Invalid:
+                        _log.Warn("{0}: {1}", error, msg);
+                        break;
+                    case MDEntryType.Trade:
+                        _log.Warn("MarketDataIncrementalRefresh cannot contain trades: {0}", msg);
+                        break;
+                    case MDEntryType.Order:
+                        var diff = new MarketOrderDiff();
+                        diff.Order = order;
+                        if (!entry.MDUpdateAction.HasValue)
+                        {
+                            _log.Warn("Missing MDUpdateAction field: {0}", msg);
+                            break;
+                        }
+                        else if (entry.MDUpdateAction.Value == '0')
+                        {
+                            diff.Type = DiffType.New;
+                        }
+                        else if (entry.MDUpdateAction.Value == '1')
+                        {
+                            diff.Type = DiffType.Change;
+                        }
+                        else if (entry.MDUpdateAction.Value == '2')
+                        {
+                            diff.Type = DiffType.Delete;
+                        }
+                        else
+                        {
+                            _log.Warn("Invalid value of MDUpdateAction {0}: {1}", entry.MDUpdateAction.Value, msg);
+                            break;
+                        }
+                        if (res.MarketData.Diff == null)
+                            res.MarketData.Diff = new List<MarketOrderDiff>();
+                        res.MarketData.Diff.Add(diff);
+                        break;
+                    
+                }
+            }
+            return res;
+        }
+
+        enum MDEntryType
+        {
+            Invalid,
+            Order,
+            Trade,
+        }
+
+        static MDEntryType MakeOrder(Mantle.Fix44.MDEntry entry, out MarketOrder order, out string error)
+        {
+            order = new MarketOrder();
+            error = null;
+            if (!entry.MDEntryPx.HasValue)
+            {
+                error = "Missing MDEntryPx field";
+                return MDEntryType.Invalid;
+            }
+            order.Price = entry.MDEntryPx.Value;
+            if (!entry.MDEntrySize.HasValue)
+            {
+                error = "Missing MDEntrySize field";
+                return MDEntryType.Invalid;
+            }
+            order.Quantity = entry.MDEntrySize.Value;
+            if (!entry.MDEntryType.HasValue)
+            {
+                error = "Missing MDEntryType field";
+                return MDEntryType.Invalid;
+            }
+            switch (entry.MDEntryType.Value)
+            {
+                case '0':
+                    order.Side = Side.Buy;
+                    return MDEntryType.Order;
+                case '1':
+                    order.Side = Side.Sell;
+                    return MDEntryType.Order;
+                case '2':
+                    if (!entry.Side.HasValue)
+                    {
+                        error = "Missing Side field";
+                        return MDEntryType.Invalid;
+                    }
+                    if (entry.Side.Value == '1')
+                    {
+                        order.Side = Side.Buy;
+                    }
+                    else if (entry.Side.Value == '2')
+                    {
+                        order.Side = Side.Sell;
+                    }
+                    else
+                    {
+                        error = String.Format("Invalid value of Side: {0}", entry.Side.Value);
+                        return MDEntryType.Invalid;
+                    }
+                    return MDEntryType.Trade;
+                default:
+                    error = String.Format("Invalid value of MDEntryType: {0}", entry.MDEntryType.Value);
+                    return MDEntryType.Invalid;
+            }
         }
     }
 }
