@@ -20,6 +20,11 @@ namespace iFix.Driver
 
         public static void Main(string[] args)
         {
+            // TODO for OKcoin market feed:
+            //   1. WTF is the deal with a bunch of trades always coming back in the first message?
+            //   2. Are orders aggregated? Look into them.
+            //   3. Manually verify that decoding works correctly.
+            //   4. Add comments to the market feed API.
             try
             {
                 // Copy-paste from https://www.okcoin.com/user/api.do.
@@ -37,9 +42,8 @@ namespace iFix.Driver
                         MarketDataSymbols = new List<string> { "BTC/USD" }
                     },
                     new TcpConnector("api.okcoin.com", 9880, ConnectionType.Secure));
-                Thread.Sleep(5000);
-                // TODO: figure out why this hangs.
-                client.Dispose();
+                while (true) Thread.Sleep(5000);
+                // client.Dispose();
             }
             catch (Exception e)
             {
