@@ -79,6 +79,8 @@ namespace iFix.Mantle.Fix44
         T Visit(ExecutionReport msg);
         T Visit(OrderCancelReject msg);
         T Visit(OrderMassCancelReport msg);
+        T Visit(MarketDataResponse msg);
+        T Visit(MarketDataIncrementalRefresh msg);
     }
 
     // Factory and parser for FIX 4.4 client and server messages.
@@ -120,6 +122,8 @@ namespace iFix.Mantle.Fix44
             if (msgType.Value == OrderMassCancelReport.MsgType.Value) return new OrderMassCancelReport();
             if (msgType.Value == OrderStatusRequest.MsgType.Value) return new OrderStatusRequest();
             if (msgType.Value == MarketDataRequest.MsgType.Value) return new MarketDataRequest();
+            if (msgType.Value == MarketDataResponse.MsgType.Value) return new MarketDataResponse();
+            if (msgType.Value == MarketDataIncrementalRefresh.MsgType.Value) return new MarketDataIncrementalRefresh();
             return null;
         }
 
@@ -565,6 +569,50 @@ namespace iFix.Mantle.Fix44
         }
 
         public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Market Data Response <W>: http://www.onixs.biz/fix-dictionary/4.4/msgType_W_87.html.
+    public class MarketDataResponse : Message, IServerMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "W" };
+        public OrigTime OrigTime = new OrigTime();
+        public Instrument Instrument = new Instrument();
+        public MDEntries MDEntries = new MDEntries();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return OrigTime;
+            yield return Instrument;
+            yield return MDEntries;
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Market Data - Incremental Refresh <X>: http://www.onixs.biz/fix-dictionary/4.4/msgType_X_88.html.
+    public class MarketDataIncrementalRefresh : Message, IServerMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "X" };
+        public Instrument Instrument = new Instrument();
+        public MDEntries MDEntries = new MDEntries();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return Instrument;
+            yield return MDEntries;
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
         {
             return visitor.Visit(this);
         }

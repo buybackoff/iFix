@@ -252,6 +252,26 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 269; } }
     }
 
+    public class OrigTime : TimestampField
+    {
+        protected override int Tag { get { return 42; } }
+    }
+
+    public class MDEntryPx : DecimalField
+    {
+        protected override int Tag { get { return 270; } }
+    }
+
+    public class MDEntrySize : DecimalField
+    {
+        protected override int Tag { get { return 271; } }
+    }
+
+    public class MDUpdateAction : CharField
+    {
+        protected override int Tag { get { return 279; } }
+    }
+
     // Component blocks: http://www.onixs.biz/fix-dictionary/4.4/#ComponentBlocks.
 
     // BeginString, BodyLength and MsgType are intentionally missing.
@@ -307,6 +327,24 @@ namespace iFix.Mantle.Fix44
         }
     }
 
+    public class MDEntry : FieldSet
+    {
+        public MDUpdateAction MDUpdateAction = new MDUpdateAction();
+        public MDEntryType MDEntryType = new MDEntryType();
+        public MDEntryPx MDEntryPx = new MDEntryPx();
+        public MDEntrySize MDEntrySize = new MDEntrySize();
+        public Side Side = new Side();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MDUpdateAction;
+            yield return MDEntryType;
+            yield return MDEntryPx;
+            yield return MDEntrySize;
+            yield return Side;
+        }
+    }
+
     // Groups: http://fixwiki.org/fixwiki/FPL:Tag_Value_Syntax#Repeating_Groups.
 
     public class TradingSessionIDGroup : FieldGroup<TradingSessionID>
@@ -327,5 +365,10 @@ namespace iFix.Mantle.Fix44
     public class MDEntryTypes : FieldGroup<MDEntryType>
     {
         protected override int GroupSizeTag { get { return 267; } }
+    }
+
+    public class MDEntries : FieldGroup<MDEntry>
+    {
+        protected override int GroupSizeTag { get { return 268; } }
     }
 }
