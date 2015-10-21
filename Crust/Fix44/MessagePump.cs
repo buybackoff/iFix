@@ -48,7 +48,7 @@ namespace iFix.Crust
                 }
                 catch (Exception e)
                 {
-                    if (!_dispose.IsCancellationRequested) _log.Error("Failed to read a message", e);
+                    if (!_dispose.IsCancellationRequested) _log.Error(e, "Failed to read a message");
                     continue;
                 }
                 try
@@ -58,7 +58,7 @@ namespace iFix.Crust
                 catch (Exception e)
                 {
                     if (!_dispose.IsCancellationRequested)
-                        _log.Error(String.Format("Failed to handle a message received from the exchange: {0}.", msg.Message), e);
+                        _log.Error(e, "Failed to handle a message received from the exchange: {0}.", msg.Message);
                 }
             }
             _log.Info("Message pump terminated");

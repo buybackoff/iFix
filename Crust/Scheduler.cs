@@ -62,7 +62,7 @@ namespace iFix.Crust
                 {
                     // It's OK if exceptions such as ObjectDisposedException are flying
                     // during the disposal. No need to spread panic by logging them.
-                    if (!_dispose.IsCancellationRequested) _log.Error("Exception in the action loop", e);
+                    if (!_dispose.IsCancellationRequested) _log.Error(e, "Exception in the action loop");
                 }
             }
             _log.Info("Action loop terminated");

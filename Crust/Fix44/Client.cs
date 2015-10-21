@@ -254,7 +254,7 @@ namespace iFix.Crust.Fix44
             catch (Exception e)
             {
                 if (!_disposed)
-                    _log.Error("Unexpected error while cancelling an order", e);
+                    _log.Error(e, "Unexpected error while cancelling an order");
                 return false;
             }
         }
@@ -284,7 +284,7 @@ namespace iFix.Crust.Fix44
             catch (Exception e)
             {
                 if (!_disposed)
-                    _log.Error("Unexpected error while replacing an order", e);
+                    _log.Error(e, "Unexpected error while replacing an order");
                 return false;
             }
         }
