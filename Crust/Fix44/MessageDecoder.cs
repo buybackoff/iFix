@@ -250,6 +250,12 @@ namespace iFix.Crust.Fix44
         public IncomingMessage Visit(Mantle.Fix44.MarketDataIncrementalRefresh msg)
         {
             var res = new IncomingMessage();
+			if (!msg.StandardHeader.SendingTime.HasValue)
+			{
+				_log.Warn("MarketDataResponse is missing OrigTime field: {0}", msg);
+				return null;
+			}
+			res.MarketData.ServerTime = msg.StandardHeader.SendingTime.Value;
             if (!msg.Instrument.Symbol.HasValue)
             {
                 _log.Warn("MarketDataResponse is missing Symbol field: {0}", msg);
