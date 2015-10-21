@@ -179,7 +179,7 @@ namespace iFix.Crust.Fix44
             _log.Info("Decoded incoming message: {0}", msg);
             if (msg.TestReqID != null)
                 _connection.Send(_messageBuilder.Heartbeat(msg.TestReqID));
-            RaiseOrderEvent(UpdateOrder(msg.OrigOrderID, msg.Op, msg.Order), msg.Fill.MakeFill());
+            RaiseOrderEvent(UpdateOrder(msg.OrigOrderID, msg.Op, msg.Order), msg.Fill.MakeFill(), msg.MarketData);
             // Finish a pending op, if there is one. Note that can belong to a different
             // order than the one we just updated. The protocol doesn't allow this but our
             // code will work just fine if it happens.
@@ -210,11 +210,11 @@ namespace iFix.Crust.Fix44
             return true;
         }
 
-        void RaiseOrderEvent(OrderState state, Fill fill)
+        void RaiseOrderEvent(OrderState state, Fill fill, MarketData marketData = null)
         {
-            if (state != null || fill != null)
+			if (state != null || fill != null || marketData != null)
             {
-                var e = new OrderEvent() { State = state, Fill = fill };
+                var e = new OrderEvent() { State = state, Fill = fill, MarketData = marketData };
                 _log.Info("Publishing OrderEvent: {0}", e);
                 Action<OrderEvent> action = Volatile.Read(ref OnOrderEvent);
                 if (action != null) action(e);
