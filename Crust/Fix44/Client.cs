@@ -212,7 +212,7 @@ namespace iFix.Crust.Fix44
 
         void RaiseOrderEvent(OrderState state, Fill fill, MarketData marketData = null)
         {
-			if (state != null || fill != null || marketData != null)
+            if (state != null || fill != null || marketData != null)
             {
                 var e = new OrderEvent() { State = state, Fill = fill, MarketData = marketData };
                 _log.Info("Publishing OrderEvent: {0}", e);
