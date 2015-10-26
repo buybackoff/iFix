@@ -18,6 +18,11 @@ namespace iFix.Crust.Fix44
             _clOrdIDGenerator = new ClOrdIDGenerator(cfg.ClOrdIDPrefix);
         }
 
+        public ClientConfig Config
+        {
+            get { return _cfg; }
+        }
+
         public Mantle.Fix44.Logon Logon()
         {
             var res = new Mantle.Fix44.Logon() { StandardHeader = StandardHeader() };
@@ -51,6 +56,13 @@ namespace iFix.Crust.Fix44
                     res[i].MDEntryTypes.Add(new Mantle.Fix44.MDEntryType() { Value = c });
                 }
             }
+            return res;
+        }
+
+        public Mantle.Fix44.TestRequest TestRequest(string testReqID)
+        {
+            var res = new Mantle.Fix44.TestRequest() { StandardHeader = StandardHeader() };
+            res.TestReqID.Value = testReqID;
             return res;
         }
 
