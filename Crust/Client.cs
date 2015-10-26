@@ -475,8 +475,8 @@ namespace iFix.Crust
         /// <summary>
         /// Fires when anything happens to one of the submitted orders.
         /// The notifications are delivered from a single thread, the same one that is used
-        /// for all network IO. It's OK to call CreateOrder() or methods of IOrderCtrl in the
-        /// callback but it's not OK to block there. An attempt to call IOrderCtrl.Cancel().Result
+        /// for all network IO. It's OK to call methods of IClient or IOrderCtrl in the callback
+        /// but it's not OK to block there. An attempt to call IOrderCtrl.Cancel().Result
         /// (that is, to block until the cancel request is sent) will cause a deadlock.
         /// </summary>
         event Action<OrderEvent> OnOrderEvent;
@@ -504,5 +504,24 @@ namespace iFix.Crust
         /// before the task finishes and even before CreateOrder returns.
         /// </summary>
         Task<IOrderCtrl> CreateOrder(NewOrderRequest request);
+
+        /// <summary>
+        /// Transition to the "connected" state, in which the client MAY have a live connection to
+        /// the exchange and thus may raise order events.
+        /// 
+        /// This method has no preconditions. It's OK to call it any time from any thread.
+        /// </summary>
+        Task Connect();
+
+        /// <summary>
+        /// Transition to the "dicsonnected" state, in which the client SHALL NOT have a live
+        /// connection to the exchange and SHALL NOT raise order events.
+        /// 
+        /// This method has no preconditions. It's OK to call it any time from any thread.
+        /// 
+        /// NOTE: Dispose() is equivalent to Disconnect().Wait(). It OK to use Disconnect() as an
+        /// asynchronous Dispose().
+        /// </summary>
+        Task Disconnect();
     }
 }

@@ -28,10 +28,15 @@ namespace iFix.Crust
             _loop = ReceiveLoop();
         }
 
+        public void StartDispose()
+        {
+            _dispose.Cancel();
+        }
+
         // Blocks until the reading stops.
         public void Dispose()
         {
-            _log.Info("Disposing of iFix.Crust.MessagePump. This may take a while.");
+            _log.Info("Disposing of iFix.Crust.MessagePump.");
             _dispose.Cancel();
             try { _loop.Wait(); } catch { }
             _log.Info("iFix.Crust.MessagePump successfully disposed of");

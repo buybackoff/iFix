@@ -93,7 +93,7 @@ namespace iFix.Crust.Fix44
         Keep,
     }
 
-    public class Client : IClient
+    class ConnectedClient
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
 
@@ -106,7 +106,7 @@ namespace iFix.Crust.Fix44
         // Set to true when Dispose() is called.
         volatile bool _disposed = false;
 
-        public Client(ClientConfig cfg, IConnector connector)
+        public ConnectedClient(ClientConfig cfg, IConnector connector)
         {
             _cfg = cfg;
             _messageBuilder = new MessageBuilder(cfg);
@@ -137,12 +137,13 @@ namespace iFix.Crust.Fix44
 
         public void Dispose()
         {
-            _log.Info("Disposing of iFix.Crust.Client");
+            _log.Info("Disposing of iFix.Crust.ConnectedClient");
             _disposed = true;
-            try { _messagePump.Dispose(); } catch { }
             try { _scheduler.Dispose(); } catch { }
+            try { _messagePump.StartDispose(); } catch { }
             try { _connection.Dispose(); } catch { }
-            _log.Info("iFix.Crust.Client successfully disposed of");
+            try { _messagePump.Dispose(); } catch { }
+            _log.Info("iFix.Crust.ConnectedClient successfully disposed of");
         }
 
         void TryTearDown(IOrder order)
@@ -291,11 +292,11 @@ namespace iFix.Crust.Fix44
 
         class OrderCtrl : IOrderCtrl
         {
-            readonly Client _client;
+            readonly ConnectedClient _client;
             readonly IOrder _order;
             readonly NewOrderRequest _request;
 
-            public OrderCtrl(Client client, IOrder order, NewOrderRequest request)
+            public OrderCtrl(ConnectedClient client, IOrder order, NewOrderRequest request)
             {
                 _client = client;
                 _order = order;
@@ -322,6 +323,115 @@ namespace iFix.Crust.Fix44
                 _client._scheduler.Schedule(() => res.RunSynchronously());
                 return res;
             }
+        }
+    }
+
+    class Box<T>
+    {
+        public T Value;
+
+        public Box(T value = default(T))
+        {
+            Value = value;
+        }
+    }
+
+    public class Client : IClient
+    {
+        readonly ClientConfig _cfg;
+        readonly IConnector _connector;
+
+        // States:
+        //   Disconnected: _client is null, _trasition is null.
+        //   Connecting or Disconnecting: _client is unspecified, _transition is not null.
+        //   Connected: _client is not null, transition is null.
+        ConnectedClient _client = null;
+        Task _transition = null;
+
+        // Protects _client and _transition.
+        readonly object _monitor = new object();
+
+        /// <summary>
+        /// Creates a new client. It starts in the "connected" state (in quotes because it may not
+        /// actually be connected yet; the actual connection to the exchange is established asynchronously).
+        /// </summary>
+        public Client(ClientConfig cfg, IConnector connector)
+        {
+            _cfg = cfg;
+            _connector = connector;
+            Connect().Wait();
+        }
+
+        public void Dispose()
+        {
+            Disconnect().Wait();
+        }
+
+        public event Action<OrderEvent> OnOrderEvent;
+
+        public Task<IOrderCtrl> CreateOrder(NewOrderRequest request)
+        {
+            lock (_monitor)
+            {
+                if (_client == null || _transition != null) return Task.FromResult<IOrderCtrl>(null);
+                return _client.CreateOrder(request);
+            }
+        }
+
+        public Task Connect()
+        {
+            return Transition(() =>
+            {
+                if (_client != null) return;
+                _client = new ConnectedClient(_cfg, _connector);
+                _client.OnOrderEvent += (OrderEvent e) =>
+                {
+                    Action<OrderEvent> action = Volatile.Read(ref OnOrderEvent);
+                    if (action != null) action(e);
+                };
+            });
+        }
+
+        public Task Disconnect()
+        {
+            return Transition(() =>
+            {
+                if (_client == null) return;
+                _client.Dispose();
+                _client = null;
+            });
+        }
+
+        Task Transition(Action transition)
+        {
+            // We need the task handle on heap.
+            var box = new Box<Task>();
+            box.Value = new Task(() =>
+            {
+                // It's OK to run it without holding a lock. There is at most transition running
+                // at a time, so writes don't race with each other. They also don't race with
+                // reads because CreateOrder() fails fast if _transition is not null.
+                transition();
+                lock (_monitor)
+                {
+                    // If there are no transitions scheduled, set transition to null.
+                    if (_transition == box.Value)
+                        _transition = null;
+                }
+            });
+            lock (_monitor)
+            {
+                if (_transition == null)
+                {
+                    box.Value.Start();
+                }
+                else
+                {
+                    _transition.ContinueWith((t) => box.Value.Start());
+                }
+                _transition = box.Value;
+            }
+            return box.Value;
         }
     }
 }

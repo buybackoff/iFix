@@ -42,12 +42,13 @@ namespace iFix.Driver
                         MarketDataSymbols = new List<string> { "BTC/USD" }
                     },
                     new TcpConnector("api.okcoin.com", 9880, ConnectionType.Secure));
-                while (true) Thread.Sleep(5000);
-                // client.Dispose();
+                client.OnOrderEvent += e => _log.Info("Generated event: {0}", e);
+                Thread.Sleep(5000);
+                client.Dispose();
             }
             catch (Exception e)
             {
-                _log.Fatal("Unexpected exception. Terminating.", e);
+                _log.Fatal(e, "Unexpected exception. Terminating.");
             }
         }
     }

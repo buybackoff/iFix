@@ -180,7 +180,8 @@ namespace iFix.Crust.Fix44
                 }
                 catch (Exception e)
                 {
-                    _log.Error(e, "Failed to read a message. Will reconnect and retry.");
+                    if (!_cancellation.IsCancellationRequested)
+                        _log.Error(e, "Failed to read a message. Will reconnect and retry.");
                 }
             }
         }
@@ -205,7 +206,8 @@ namespace iFix.Crust.Fix44
                 }
                 catch (Exception e)
                 {
-                    _log.Error(e, "Failed to publish a message.");
+                    if (!_cancellation.IsCancellationRequested)
+                        _log.Error(e, "Failed to publish a message.");
                     // Invalidate current session.
                     TryGetSession(session);
                     return null;
@@ -283,10 +285,12 @@ namespace iFix.Crust.Fix44
                     }
                     catch (Exception e)
                     {
-                        _log.Warn(e, "Failed to connect. Will retry in 1s.");
+                        if (!_cancellation.IsCancellationRequested)
+                            _log.Warn(e, "Failed to connect. Will retry in 1s.");
                     }
                     // Wait for 1 second before trying to reconnect.
-                    Thread.Sleep(1000);
+                    if (!_cancellation.IsCancellationRequested)
+                        Thread.Sleep(1000);
                 }
             }
         }
