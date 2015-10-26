@@ -208,14 +208,13 @@ namespace iFix.Crust.Fix44
                 {
                     if (!_cancellation.IsCancellationRequested)
                         _log.Error(e, "Failed to publish a message.");
-                    // Invalidate current session.
-                    TryGetSession(session);
-                    return null;
                 }
                 finally
                 {
                     session.DecRef();
                 }
+                Invalidate(session);
+                return null;
             }
         }
 
@@ -226,8 +225,12 @@ namespace iFix.Crust.Fix44
         // Doesn't block.
         public void Reconnect()
         {
-            // Wow, look at this weird contraption!
-            TryGetSession(TryGetSession(null));
+            _log.Info("Going to break the current connection and open a new one. " +
+                      "This might lead to a few warnings in the logs. Sorry.");
+            Session session = TryGetSession(null);
+            if (session == null) return;
+            session.DecRef();
+            Invalidate(session);
         }
 
         // Dispose() is reentrant and thread-safe. It may be called concurrently with
@@ -249,21 +252,40 @@ namespace iFix.Crust.Fix44
             }
         }
 
+        void Invalidate(Session invalid)
+        {
+            if (invalid == null) return;
+            lock (_sessionMonitor)
+            {
+                if (_session == invalid)
+                {
+                    _session.Dispose();
+                    _session = null;
+                }
+            }
+        }
+
         // Returns fully initialized session that is NOT the same as 'invalid'
         // (supposedly that one is malfunctioning). Returns null if the current
         // session is not initialized or if it's equal to the invalid.
         //
-        // Never returns null. Disposes of the invalid session.
+        // Disposes of the invalid session.
         Session TryGetSession(Session invalid)
         {
             if (_cancellation.IsCancellationRequested) throw new ObjectDisposedException("DurableConnection");
-            if (invalid != null) invalid.Dispose();
             lock (_sessionMonitor)
             {
                 if (_session != null)
                 {
-                    if (_session == invalid) _session = null;
-                    else _session.IncRef();
+                    if (_session == invalid)
+                    {
+                        _session.Dispose();
+                        _session = null;
+                    }
+                    else
+                    {
+                        _session.IncRef();
+                    }
                 }
                 return _session;
             }
