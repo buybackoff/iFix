@@ -57,6 +57,35 @@ namespace iFix.Crust.Fix44
         }
     }
 
+    class Lazy<T> where T : class, new()
+    {
+        T _value;
+
+        public T Value
+        {
+            get
+            {
+                if (_value == null) _value = new T();
+                return _value;
+            }
+        }
+
+        public T ValueOrNull
+        {
+            get { return _value; }
+        }
+
+        public bool Has
+        {
+            get { return _value != null; }
+        }
+
+        public override string ToString()
+        {
+            return _value == null ? "null" : _value.ToString();
+        }
+    }
+
     // Data received from the exchange that is relevant to us.
     // All fields are optional (may be null). They are extracted independently from incoming messages.
     class IncomingMessage
@@ -64,28 +93,66 @@ namespace iFix.Crust.Fix44
         // If set, we need to reply with a heartbeat.
         public string TestReqID;
 
+        // If set, it's a reply to our test request.
+        public string TestRespID;
+
         // If set, we are supposed to have an order with this ID.
         // Order.OrderID should contain the new ID that the exchange
         // has assigned to the order.
         public string OrigOrderID;
 
         // These fields are new'ed to make setting them easier.
-        public OrderOpID Op = new OrderOpID();
-        public OrderUpdate Order = new OrderUpdate();
-        public FillData Fill = new FillData();
-        public MarketData MarketData = new MarketData();
+        public Lazy<OrderOpID> Op = new Lazy<OrderOpID>();
+        public Lazy<OrderUpdate> Order = new Lazy<OrderUpdate>();
+        public Lazy<FillData> Fill = new Lazy<FillData>();
+        public Lazy<MarketData> MarketData = new Lazy<MarketData>();
 
         public override string ToString()
         {
             var res = new StringBuilder();
             res.Append("(");
-            bool comma = false;
-            comma = Append(res, comma, TestReqID, "TestReqID");
-            comma = Append(res, comma, OrigOrderID, "OrigOrderID");
-            comma = Append(res, comma, Op, "Op");
-            comma = Append(res, comma, Order, "Order");
-            comma = Append(res, comma, Fill, "Fill");
-            comma = Append(res, comma, MarketData, "MarketData");
+            bool empty = true;
+            if (TestReqID != null)
+            {
+                res.AppendFormat("TestReqID = {0}", TestReqID);
+                empty = false;
+            }
+            if (TestRespID != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("TestRespID = {0}", TestRespID);
+                empty = false;
+            }
+            if (OrigOrderID != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("OrigOrderID = {0}", OrigOrderID);
+                empty = false;
+            }
+            if (Op.Has)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("Op = {0}", Op);
+                empty = false;
+            }
+            if (Order.Has)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("Order = {0}", Order);
+                empty = false;
+            }
+            if (Fill.Has)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("Fill = {0}", Fill);
+                empty = false;
+            }
+            if (MarketData.Has)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("MarketData = {0}", MarketData);
+                empty = false;
+            }
             res.Append(")");
             return res.ToString();
         }
@@ -115,10 +182,16 @@ namespace iFix.Crust.Fix44
         }
 
         public IncomingMessage Visit(Mantle.Fix44.Logon msg) { return null; }
-        public IncomingMessage Visit(Mantle.Fix44.Heartbeat msg) { return null; }
         public IncomingMessage Visit(Mantle.Fix44.SequenceReset msg) { return null; }
         public IncomingMessage Visit(Mantle.Fix44.ResendRequest msg) { return null; }
         public IncomingMessage Visit(Mantle.Fix44.OrderMassCancelReport msg) { return null; }
+
+        public IncomingMessage Visit(Mantle.Fix44.Heartbeat msg) {
+            if (!msg.TestReqID.HasValue) return null;
+            var res = new IncomingMessage();
+            res.TestRespID = msg.TestReqID.Value;
+            return res;
+        }
 
         public IncomingMessage Visit(Mantle.Fix44.TestRequest msg)
         {
@@ -134,7 +207,7 @@ namespace iFix.Crust.Fix44
         {
             var res = new IncomingMessage();
             if (msg.RefSeqNum.HasValue)
-                res.Op.SeqNum = new DurableSeqNum { SessionID = _sessionID, SeqNum = msg.RefSeqNum.Value };
+                res.Op.Value.SeqNum = new DurableSeqNum { SessionID = _sessionID, SeqNum = msg.RefSeqNum.Value };
             else
                 _log.Warn("Reject is missing RefSeqNum");
             return res;
@@ -144,13 +217,13 @@ namespace iFix.Crust.Fix44
         {
             var res = new IncomingMessage();
             if (msg.ClOrdID.HasValue)
-                res.Op.ClOrdID = msg.ClOrdID.Value;
+                res.Op.Value.ClOrdID = msg.ClOrdID.Value;
             else
                 _log.Warn("OrderCancelReject is missing ClOrdID");
             // 0: Too late to cancel.
             // 1: Unknown order.
             if (msg.CxlRejReason.HasValue && (msg.CxlRejReason.Value == 0 || msg.CxlRejReason.Value == 1))
-                res.Order.Status = OrderStatus.Finished;
+                res.Order.Value.Status = OrderStatus.Finished;
             return res;
         }
 
@@ -158,53 +231,53 @@ namespace iFix.Crust.Fix44
         {
             var res = new IncomingMessage();
             if (msg.ClOrdID.HasValue)
-                res.Op.ClOrdID = msg.ClOrdID.Value;
+                res.Op.Value.ClOrdID = msg.ClOrdID.Value;
             else
                 _log.Warn("ExecutionReport is missing ClOrdID");
             if (msg.OrigOrderID.HasValue)
                 res.OrigOrderID = msg.OrigOrderID.Value;
             if (msg.OrderID.HasValue)
-                res.Order.OrderID = msg.OrderID.Value;
+                res.Order.Value.OrderID = msg.OrderID.Value;
             switch (msg.OrdStatus.Value)
             {
                 // New.
-                case '0': res.Order.Status = OrderStatus.Accepted; break;
+                case '0': res.Order.Value.Status = OrderStatus.Accepted; break;
                 // Partially filled.
-                case '1': res.Order.Status = OrderStatus.PartiallyFilled; break;
+                case '1': res.Order.Value.Status = OrderStatus.PartiallyFilled; break;
                 // Filled.
-                case '2': res.Order.Status = OrderStatus.Finished; break;
+                case '2': res.Order.Value.Status = OrderStatus.Finished; break;
                 // Cancelled.
-                case '4': res.Order.Status = OrderStatus.Finished; break;
+                case '4': res.Order.Value.Status = OrderStatus.Finished; break;
                 // Pending cancel.
-                case '6': res.Order.Status = OrderStatus.TearingDown; break;
+                case '6': res.Order.Value.Status = OrderStatus.TearingDown; break;
                 // Rejected.
-                case '8': res.Order.Status = OrderStatus.Finished; break;
+                case '8': res.Order.Value.Status = OrderStatus.Finished; break;
                 // Suspended.
-                case '9': res.Order.Status = OrderStatus.Finished; break;
+                case '9': res.Order.Value.Status = OrderStatus.Finished; break;
                 // Pending replace.
-                case 'E': res.Order.Status = OrderStatus.Accepted; break;
+                case 'E': res.Order.Value.Status = OrderStatus.Accepted; break;
                 default:
                     _log.Warn("Unknown OrdStatus '{0}' in message {1}", msg.OrdStatus.Value, msg);
                     break;
             }
             if (msg.Price.HasValue && msg.Price.Value > 0)
-                res.Order.Price = msg.Price.Value;
+                res.Order.Value.Price = msg.Price.Value;
             // If OrdStatus is TearingDown, LeavesQty is set to 0 even though the order is still active.
             // We'd rather leave the last value.
             if (msg.LeavesQty.HasValue && msg.OrdStatus.Value != '6')
-                res.Order.LeftQuantity = msg.LeavesQty.Value;
+                res.Order.Value.LeftQuantity = msg.LeavesQty.Value;
             if (msg.Symbol.HasValue)
-                res.Fill.Symbol = msg.Symbol.Value;
+                res.Fill.Value.Symbol = msg.Symbol.Value;
             if (msg.Side.HasValue)
             {
-                if (msg.Side.Value == '1') res.Fill.Side = Side.Buy;
-                else if (msg.Side.Value == '2') res.Fill.Side = Side.Sell;
+                if (msg.Side.Value == '1') res.Fill.Value.Side = Side.Buy;
+                else if (msg.Side.Value == '2') res.Fill.Value.Side = Side.Sell;
                 else _log.Warn("Unknown Side '{0}' in message {1}", msg.Side.Value, msg);
             }
             if (msg.LastQty.HasValue && msg.LastQty.Value > 0)
-                res.Fill.Quantity = msg.LastQty.Value;
+                res.Fill.Value.Quantity = msg.LastQty.Value;
             if (msg.LastPx.HasValue && msg.LastPx.Value > 0)
-                res.Fill.Price = msg.LastPx.Value;
+                res.Fill.Value.Price = msg.LastPx.Value;
             return res;
         }
 
@@ -216,13 +289,13 @@ namespace iFix.Crust.Fix44
                 _log.Warn("MarketDataResponse is missing OrigTime field: {0}", msg);
                 return null;
             }
-            res.MarketData.ServerTime = msg.OrigTime.Value;
+            res.MarketData.Value.ServerTime = msg.OrigTime.Value;
             if (!msg.Instrument.Symbol.HasValue)
             {
                 _log.Warn("MarketDataResponse is missing Symbol field: {0}", msg);
                 return null;
             }
-            res.MarketData.Symbol = msg.Instrument.Symbol.Value;
+            res.MarketData.Value.Symbol = msg.Instrument.Symbol.Value;
             foreach (Mantle.Fix44.MDEntry entry in msg.MDEntries)
             {
                 MarketOrder order;
@@ -233,14 +306,14 @@ namespace iFix.Crust.Fix44
                         _log.Warn("{0}: {1}", error, msg);
                         break;
                     case MDEntryType.Order:
-                        if (res.MarketData.Snapshot == null)
-                            res.MarketData.Snapshot = new List<MarketOrder>();
-                        res.MarketData.Snapshot.Add(order);
+                        if (res.MarketData.Value.Snapshot == null)
+                            res.MarketData.Value.Snapshot = new List<MarketOrder>();
+                        res.MarketData.Value.Snapshot.Add(order);
                         break;
                     case MDEntryType.Trade:
-                        if (res.MarketData.Trades == null)
-                            res.MarketData.Trades = new List<MarketOrder>();
-                        res.MarketData.Trades.Add(order);
+                        if (res.MarketData.Value.Trades == null)
+                            res.MarketData.Value.Trades = new List<MarketOrder>();
+                        res.MarketData.Value.Trades.Add(order);
                         break;
                 }
             }
@@ -255,13 +328,13 @@ namespace iFix.Crust.Fix44
                 _log.Warn("MarketDataResponse is missing SendingTime field: {0}", msg);
                 return null;
             }
-            res.MarketData.ServerTime = msg.StandardHeader.SendingTime.Value;
+            res.MarketData.Value.ServerTime = msg.StandardHeader.SendingTime.Value;
             if (!msg.Instrument.Symbol.HasValue)
             {
                 _log.Warn("MarketDataResponse is missing Symbol field: {0}", msg);
                 return null;
             }
-            res.MarketData.Symbol = msg.Instrument.Symbol.Value;
+            res.MarketData.Value.Symbol = msg.Instrument.Symbol.Value;
             foreach (Mantle.Fix44.MDEntry entry in msg.MDEntries)
             {
                 MarketOrder order;
@@ -299,9 +372,9 @@ namespace iFix.Crust.Fix44
                             _log.Warn("Invalid value of MDUpdateAction {0}: {1}", entry.MDUpdateAction.Value, msg);
                             break;
                         }
-                        if (res.MarketData.Diff == null)
-                            res.MarketData.Diff = new List<MarketOrderDiff>();
-                        res.MarketData.Diff.Add(diff);
+                        if (res.MarketData.Value.Diff == null)
+                            res.MarketData.Value.Diff = new List<MarketOrderDiff>();
+                        res.MarketData.Value.Diff.Add(diff);
                         break;
 
                 }
