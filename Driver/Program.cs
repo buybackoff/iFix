@@ -39,6 +39,7 @@ namespace iFix.Driver
                         SenderCompID = Guid.NewGuid().ToString(),
                         TargetCompID = "OKSERVER",
                         Account = String.Format("{0},{1}", apiKey, secretKey),
+                        HeartBtInt = 2,
                         MarketDataSymbols = new List<string> { "BTC/USD" }
                     },
                     new TcpConnector("api.okcoin.com", 9880, ConnectionType.Secure));
