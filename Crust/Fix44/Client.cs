@@ -93,6 +93,86 @@ namespace iFix.Crust.Fix44
         Keep,
     }
 
+    class ConnectionWatchdog
+    {
+        static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
+        static readonly string TestReqID = "iFix";
+        static readonly int NumSentBeforeReconnect = 2;
+
+        readonly DurableConnection _connection;
+        readonly Scheduler _scheduler;
+        readonly MessageBuilder _messageBuilder;
+        readonly TimeSpan _hearBeatPeriod;
+
+        int _numSent = 0;
+        DateTime _updated = DateTime.UtcNow;
+
+        public ConnectionWatchdog(DurableConnection connection, Scheduler scheduler, MessageBuilder messageBuilder)
+        {
+            _connection = connection;
+            _scheduler = scheduler;
+            _messageBuilder = messageBuilder;
+            _hearBeatPeriod = TimeSpan.FromSeconds(messageBuilder.Config.HeartBtInt);
+            Reschedule();
+        }
+
+        void Check()
+        {
+            try
+            {
+                var now = DateTime.UtcNow;
+                if (now - _updated < _hearBeatPeriod) return;
+                _updated = now;
+                // If we have successfully sent several test requests in a row and
+                // haven't received any heartbeats back, it's time to reconnect.
+                if (_numSent == NumSentBeforeReconnect)
+                {
+                    _log.Info("Didn't recieve a heartbeat for a long time. " +
+                              "Assuming that the remote side is dead. Reconnecting.");
+                    _numSent = 0;
+                    try { _connection.Reconnect(); }
+                    catch { }
+                    return;
+                }
+                try
+                {
+                    _log.Info("Sending a TestRequest");
+                    if (_connection.Send(_messageBuilder.TestRequest(TestReqID)) != null)
+                    {
+                        ++_numSent;
+                        return;
+                    }
+                }
+                catch { }
+                // We were unable to send a test request. Reset the counter. There is no connection
+                // to reset anyway.
+                _numSent = 0;
+                return;
+            }
+            finally
+            {
+                Reschedule();
+            }
+        }
+
+        public void OnHeartbeat(string reply)
+        {
+            if (reply != TestReqID)
+            {
+                _log.Warn("Heartbeat has invalid TestReqID field: {0}", reply);
+                return;
+            }
+            _numSent = 0;
+            _updated = DateTime.UtcNow;
+        }
+
+        void Reschedule()
+        {
+            _scheduler.Schedule(Check, _updated + _hearBeatPeriod);
+        }
+    }
+
     class ConnectedClient
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
@@ -103,6 +183,7 @@ namespace iFix.Crust.Fix44
         readonly MessageBuilder _messageBuilder;
         readonly DurableConnection _connection;
         readonly MessagePump _messagePump;
+        readonly ConnectionWatchdog _watchdog;
         // Set to true when Dispose() is called.
         volatile bool _disposed = false;
 
@@ -122,6 +203,7 @@ namespace iFix.Crust.Fix44
             _messagePump = new MessagePump(
                 _connection,
                 (msg, sessionID) => _scheduler.Schedule(() => OnMessage(msg.Visit(new MessageDecoder(sessionID)))));
+            _watchdog = new ConnectionWatchdog(_connection, _scheduler, _messageBuilder);
         }
 
         public event Action<OrderEvent> OnOrderEvent;
@@ -180,11 +262,14 @@ namespace iFix.Crust.Fix44
             _log.Info("Decoded incoming message: {0}", msg);
             if (msg.TestReqID != null)
                 _connection.Send(_messageBuilder.Heartbeat(msg.TestReqID));
-            RaiseOrderEvent(UpdateOrder(msg.OrigOrderID, msg.Op, msg.Order), msg.Fill.MakeFill(), msg.MarketData);
+            if (msg.TestRespID != null)
+                _watchdog.OnHeartbeat(msg.TestRespID);
+            RaiseOrderEvent(UpdateOrder(msg.OrigOrderID, msg.Op.Value, msg.Order.Value),
+                            msg.Fill.Value.MakeFill(), msg.MarketData.ValueOrNull);
             // Finish a pending op, if there is one. Note that can belong to a different
             // order than the one we just updated. The protocol doesn't allow this but our
             // code will work just fine if it happens.
-            IOrder order = _orders.FindByOpID(msg.Op);
+            IOrder order = _orders.FindByOpID(msg.Op.Value);
             if (order != null) order.FinishPending();
         }
 
