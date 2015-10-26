@@ -219,6 +219,17 @@ namespace iFix.Crust.Fix44
             }
         }
 
+        // Throws ObjectDisposedException if disposed.
+        // If not connected, does nothing.
+        // If connected, marks the current connection invalid. It'll be closed and the
+        // new connection will be opened when all calls to Send() and Receive() finish.
+        // Doesn't block.
+        public void Reconnect()
+        {
+            // Wow, look at this weird contraption!
+            TryGetSession(TryGetSession(null));
+        }
+
         // Dispose() is reentrant and thread-safe. It may be called concurrently with
         // Send() and Receive().
         //
