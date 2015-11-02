@@ -92,7 +92,7 @@ namespace iFix.Crust.Fix44
         /// If MaxTradesPerIncomingMessage is positive, iFix will ignore incoming messages
         /// that have more than the specified number of trades.
         /// </summary>
-        public int MaxTradesPerIncomingMessage = 10;
+        public int MaxTradesPerIncomingMessage = 0;
     }
 
     // What should be done with the order if an attempt to replace it is rejected?
