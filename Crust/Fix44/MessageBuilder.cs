@@ -145,6 +145,14 @@ namespace iFix.Crust.Fix44
             return res;
         }
 
+        public Mantle.Fix44.AccountInfoRequest AccountInfoRequest()
+        {
+            var res = new Mantle.Fix44.AccountInfoRequest() { StandardHeader = StandardHeader() };
+            res.Account.Value = _cfg.Account;
+            res.AccReqID.Value = Guid.NewGuid().ToString();
+            return res;
+        }
+
         Mantle.Fix44.StandardHeader StandardHeader()
         {
             var res = new Mantle.Fix44.StandardHeader();

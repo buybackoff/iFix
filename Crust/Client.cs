@@ -342,6 +342,55 @@ namespace iFix.Crust
         }
     }
 
+    public class Asset : ICloneable
+    {
+        public decimal Available = 0m;
+        public decimal InUse = 0m;
+
+        public object Clone()
+        {
+            return MemberwiseClone();
+        }
+
+        public override string ToString()
+        {
+            return String.Format("(Available = {0}, InUse = {1})", Available, InUse);
+        }
+    }
+
+    public class AccountInfo : ICloneable
+    {
+        public Dictionary<string, Asset> Assets;
+
+        public object Clone()
+        {
+            var res = new AccountInfo();
+            if (Assets == null) return res;
+            foreach (var kv in Assets)
+            {
+                res.Assets.Add(kv.Key, (Asset)kv.Value.Clone());
+            }
+            return res;
+        }
+
+        public override string ToString()
+        {
+            var res = new StringBuilder("(");
+            if (Assets != null)
+            {
+                bool empty = true;
+                foreach (var kv in Assets)
+                {
+                    if (!empty) res.Append(", ");
+                    res.AppendFormat("{0} = {1}", kv.Key, kv.Value);
+                    empty = false;
+                }
+            }
+            res.Append(")");
+            return res.ToString();
+        }
+    }
+
     /// <summary>
     /// Describes a change to an order.
     /// 
@@ -366,6 +415,8 @@ namespace iFix.Crust
 
         public MarketData MarketData;
 
+        public AccountInfo AccountInfo;
+
         public override string ToString()
         {
             var res = new StringBuilder();
@@ -388,6 +439,12 @@ namespace iFix.Crust
                 res.AppendFormat("MarketData = {0}", MarketData);
                 empty = false;
             }
+            if (AccountInfo != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("AccountInfo = {0}", AccountInfo);
+                empty = false;
+            }
             res.Append(")");
             return res.ToString();
         }
@@ -399,6 +456,7 @@ namespace iFix.Crust
                 State = (OrderState)State.Clone(),
                 Fill = (Fill)Fill.Clone(),
                 MarketData = (MarketData)MarketData.Clone(),
+                AccountInfo = (AccountInfo)AccountInfo.Clone(),
             };
         }
     }
@@ -533,5 +591,15 @@ namespace iFix.Crust
         /// there is no connection), the task completes with `false`.
         /// </summary>
         Task<bool> RequestMarketData();
+
+        /// <summary>
+        /// Requests account info from the exchange. The info will be delivered asynchronously to
+        /// the event callback.
+        /// 
+        /// The task completes with `true` as soon as the request is sent to the exchange (without
+        /// waiting for the reply). If the request can't be send to the exchange (for example, if
+        /// there is no connection), the task completes with `false`.
+        /// </summary>
+        Task<bool> RequestAccountInfo();
     }
 }

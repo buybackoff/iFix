@@ -243,6 +243,13 @@ namespace iFix.Crust.Fix44
             return res;
         }
 
+        public Task<bool> RequestAccountInfo()
+        {
+            var res = new Task<bool>(() => _connection.Send(_messageBuilder.AccountInfoRequest()) != null);
+            _scheduler.Schedule(() => res.RunSynchronously());
+            return res;
+        }
+
         public void Dispose()
         {
             _log.Info("Disposing of iFix.Crust.ConnectedClient");
@@ -259,7 +266,7 @@ namespace iFix.Crust.Fix44
             if (order.Status == OrderStatus.TearingDown)
             {
                 _log.Warn("Order has been in status TearingDown for too long. Finishing it: {0}", order);
-                RaiseOrderEvent(order.Update(new OrderUpdate() { Status = OrderStatus.Finished }), null);
+                RaiseOrderEvent(state: order.Update(new OrderUpdate() { Status = OrderStatus.Finished }));
             }
         }
 
@@ -290,8 +297,11 @@ namespace iFix.Crust.Fix44
                 _connection.Send(_messageBuilder.Heartbeat(msg.TestReqID));
             if (msg.TestRespID != null)
                 _watchdog.OnHeartbeat(msg.TestRespID);
-            RaiseOrderEvent(UpdateOrder(msg.OrigOrderID, msg.Op.Value, msg.Order.Value),
-                            msg.Fill.Value.MakeFill(), msg.MarketData.ValueOrNull);
+            RaiseOrderEvent(
+                state: UpdateOrder(msg.OrigOrderID, msg.Op.Value, msg.Order.Value),
+                fill: msg.Fill.Value.MakeFill(),
+                marketData: msg.MarketData.ValueOrNull,
+                accountInfo: msg.AccountInfo.ValueOrNull);
             // Finish a pending op, if there is one. Note that can belong to a different
             // order than the one we just updated. The protocol doesn't allow this but our
             // code will work just fine if it happens.
@@ -304,7 +314,7 @@ namespace iFix.Crust.Fix44
             IOrder order = _orders.FindByOpID(id);
             if (order == null) return;
             _log.Warn("OrderOp {0} timed out for order {1}", id, order);
-            RaiseOrderEvent(order.Update(new OrderUpdate() { Status = statusOnTimeout }), null);
+            RaiseOrderEvent(state: order.Update(new OrderUpdate() { Status = statusOnTimeout }));
             // The previus call to Update may have finished the Op, so we need to check
             // whether it's still pending.
             if (order.IsPending) order.FinishPending();
@@ -322,7 +332,8 @@ namespace iFix.Crust.Fix44
             return true;
         }
 
-        void RaiseOrderEvent(OrderState state, Fill fill, MarketData marketData = null)
+        void RaiseOrderEvent(OrderState state = null, Fill fill = null, MarketData marketData = null,
+                             AccountInfo accountInfo = null)
         {
             if (_cfg.MaxTradesPerIncomingMessage > 0 && marketData != null && marketData.Trades != null &&
                 marketData.Trades.Count > _cfg.MaxTradesPerIncomingMessage)
@@ -330,9 +341,9 @@ namespace iFix.Crust.Fix44
                 _log.Info("Incoming message has too many trades. Probably bogus data. Ignoring it.");
                 marketData.Trades = null;
             }
-            if (state != null || fill != null || marketData != null)
+            if (state != null || fill != null || marketData != null || accountInfo != null)
             {
-                var e = new OrderEvent() { State = state, Fill = fill, MarketData = marketData };
+                var e = new OrderEvent() { State = state, Fill = fill, MarketData = marketData, AccountInfo = accountInfo };
                 _log.Info("Publishing OrderEvent: {0}", e);
                 Action<OrderEvent> action = Volatile.Read(ref OnOrderEvent);
                 if (action != null) action(e);
@@ -347,7 +358,7 @@ namespace iFix.Crust.Fix44
             if (StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg), OrderStatus.Finished)) return true;
             // We were unable to send a new order request to the exchange.
             // Notify the caller that the order is finished.
-            RaiseOrderEvent(order.Update(new OrderUpdate() { Status = OrderStatus.Finished }), null);
+            RaiseOrderEvent(state: order.Update(new OrderUpdate() { Status = OrderStatus.Finished }));
             return false;
         }
 
@@ -525,6 +536,15 @@ namespace iFix.Crust.Fix44
             {
                 if (_client == null || _transition != null) return Task.FromResult(false);
                 return _client.RequestMarketData();
+            }
+        }
+
+        public Task<bool> RequestAccountInfo()
+        {
+            lock (_monitor)
+            {
+                if (_client == null || _transition != null) return Task.FromResult(false);
+                return _client.RequestAccountInfo();
             }
         }
 

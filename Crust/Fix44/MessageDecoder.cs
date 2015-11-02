@@ -106,6 +106,7 @@ namespace iFix.Crust.Fix44
         public Lazy<OrderUpdate> Order = new Lazy<OrderUpdate>();
         public Lazy<FillData> Fill = new Lazy<FillData>();
         public Lazy<MarketData> MarketData = new Lazy<MarketData>();
+        public Lazy<AccountInfo> AccountInfo = new Lazy<AccountInfo>();
 
         public override string ToString()
         {
@@ -151,6 +152,12 @@ namespace iFix.Crust.Fix44
             {
                 if (!empty) res.Append(", ");
                 res.AppendFormat("MarketData = {0}", MarketData);
+                empty = false;
+            }
+            if (AccountInfo.Has)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("AccountInfo = {0}", AccountInfo);
                 empty = false;
             }
             res.Append(")");
@@ -381,6 +388,45 @@ namespace iFix.Crust.Fix44
 
                 }
             }
+            return res;
+        }
+
+        public IncomingMessage Visit(Mantle.Fix44.AccountInfoResponse msg)
+        {
+            if (!msg.Currency.HasValue)
+            {
+                _log.Warn("AccountInfoResponse is missing Currency field: {0}", msg);
+                return null;
+            }
+            string[] currency = msg.Currency.Value.Split('/');
+            if (currency.Length != 3 || currency.Any(s => s.Length == 0))
+            {
+                _log.Warn("AccountInfoResponse has invalid Currency field: {0}", msg);
+                return null;
+            }
+            if (!msg.FreeCurrency1.HasValue || !msg.FreeCurrency2.HasValue || !msg.FreeCurrency3.HasValue)
+            {
+                _log.Warn("AccountInfoResponse is missing FreeCurrencyX field: {0}", msg);
+                return null;
+            }
+            if (!msg.FrozenCurrency1.HasValue || !msg.FrozenCurrency2.HasValue || !msg.FrozenCurrency3.HasValue)
+            {
+                _log.Warn("AccountInfoResponse is missing FrozenCurrencyX field: {0}", msg);
+                return null;
+            }
+            var assets = new Dictionary<string, Asset>();
+            // Note that the mapping between currency[i] and {Free,Used}Currency[j] isn't straightforward.
+            assets[currency[0]] = new Asset() { Available = msg.FreeCurrency3.Value, InUse = msg.FrozenCurrency3.Value };
+            assets[currency[1]] = new Asset() { Available = msg.FreeCurrency1.Value, InUse = msg.FrozenCurrency1.Value };
+            assets[currency[2]] = new Asset() { Available = msg.FreeCurrency2.Value, InUse = msg.FrozenCurrency2.Value };
+            if (assets.Count != 3)
+            {
+                // This can happen if there are dups in `currency`.
+                _log.Warn("AccountInfoResponse has invalid Currency field: {0}", msg);
+                return null;
+            }
+            var res = new IncomingMessage();
+            res.AccountInfo.Value.Assets = assets;
             return res;
         }
 

@@ -64,6 +64,7 @@ namespace iFix.Mantle.Fix44
         T Visit(OrderMassCancelRequest msg);
         T Visit(OrderStatusRequest msg);
         T Visit(MarketDataRequest msg);
+        T Visit(AccountInfoRequest msg);
     }
 
     // FIX client can use this interface to handle all types of messages
@@ -81,6 +82,7 @@ namespace iFix.Mantle.Fix44
         T Visit(OrderMassCancelReport msg);
         T Visit(MarketDataResponse msg);
         T Visit(MarketDataIncrementalRefresh msg);
+        T Visit(AccountInfoResponse msg);
     }
 
     // Factory and parser for FIX 4.4 client and server messages.
@@ -124,6 +126,8 @@ namespace iFix.Mantle.Fix44
             if (msgType.Value == MarketDataRequest.MsgType.Value) return new MarketDataRequest();
             if (msgType.Value == MarketDataResponse.MsgType.Value) return new MarketDataResponse();
             if (msgType.Value == MarketDataIncrementalRefresh.MsgType.Value) return new MarketDataIncrementalRefresh();
+            if (msgType.Value == AccountInfoRequest.MsgType.Value) return new AccountInfoRequest();
+            if (msgType.Value == AccountInfoResponse.MsgType.Value) return new AccountInfoResponse();
             return null;
         }
 
@@ -612,6 +616,58 @@ namespace iFix.Mantle.Fix44
             yield return StandardHeader;
             yield return Instrument;
             yield return MDEntries;
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Account Info Request <Z1000>: OKCoin extension.
+    public class AccountInfoRequest : Message, IClientMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "Z1000" };
+        public Account Account = new Account();
+        public AccReqID AccReqID = new AccReqID();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return Account;
+            yield return AccReqID;
+        }
+
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Account Info Response <Z1001>: OKCoin extension.
+    public class AccountInfoResponse : Message, IServerMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "Z1001" };
+        public Currency Currency = new Currency();
+        public FreeCurrency1 FreeCurrency1 = new FreeCurrency1();
+        public FreeCurrency2 FreeCurrency2 = new FreeCurrency2();
+        public FreeCurrency3 FreeCurrency3 = new FreeCurrency3();
+        public FrozenCurrency1 FrozenCurrency1 = new FrozenCurrency1();
+        public FrozenCurrency2 FrozenCurrency2 = new FrozenCurrency2();
+        public FrozenCurrency3 FrozenCurrency3 = new FrozenCurrency3();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return Currency;
+            yield return FreeCurrency1;
+            yield return FreeCurrency2;
+            yield return FreeCurrency3;
+            yield return FrozenCurrency1;
+            yield return FrozenCurrency2;
+            yield return FrozenCurrency3;
         }
 
         public T Visit<T>(IServerMessageVisitor<T> visitor)

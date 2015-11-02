@@ -272,6 +272,56 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 279; } }
     }
 
+    // OKCoin extension: Client-assigned unique ID of this request.
+    public class AccReqID : StringField
+    {
+        protected override int Tag { get { return 8000; } }
+    }
+
+    // OKCoin uses an odd version of this in Account Info Response.
+    //   - okcoin.com gives "USD/BTC/LTC".
+    //   - okcoin.cn gives "CNY/BTC/LTC".
+    public class Currency : StringField
+    {
+        protected override int Tag { get { return 15; } }
+    }
+
+    // OKCoin extension. They call it FreeBtc.
+    public class FreeCurrency1 : DecimalField
+    {
+        protected override int Tag { get { return 8101; } }
+    }
+
+    // OKCoin extension. They call it FreeLtc.
+    public class FreeCurrency2 : DecimalField
+    {
+        protected override int Tag { get { return 8102; } }
+    }
+
+    // OKCoin extension. They call it FreeUsd on okcoin.com and FreeCny on okcoin.cn.
+    public class FreeCurrency3 : DecimalField
+    {
+        protected override int Tag { get { return 8103; } }
+    }
+
+    // OKCoin extension. They call it FreezedBtc.
+    public class FrozenCurrency1 : DecimalField
+    {
+        protected override int Tag { get { return 8104; } }
+    }
+
+    // OKCoin extension. They call it FreezedLtc.
+    public class FrozenCurrency2 : DecimalField
+    {
+        protected override int Tag { get { return 8105; } }
+    }
+
+    // OKCoin extension. They call it FreezedUsd on okcoin.com and FreezedCny on okcoin.cn.
+    public class FrozenCurrency3 : DecimalField
+    {
+        protected override int Tag { get { return 8106; } }
+    }
+
     // Component blocks: http://www.onixs.biz/fix-dictionary/4.4/#ComponentBlocks.
 
     // BeginString, BodyLength and MsgType are intentionally missing.
