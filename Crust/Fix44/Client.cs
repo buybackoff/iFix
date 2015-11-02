@@ -229,6 +229,20 @@ namespace iFix.Crust.Fix44
             return res;
         }
 
+        public Task<bool> RequestMarketData()
+        {
+            var res = new Task<bool>(() =>
+            {
+                foreach (string symbol in _cfg.MarketDataSymbols)
+                    foreach (var msg in _messageBuilder.MarketDataRequest(symbol))
+                        if (_connection.Send(msg) == null)
+                            return false;
+                return true;
+            });
+            _scheduler.Schedule(() => res.RunSynchronously());
+            return res;
+        }
+
         public void Dispose()
         {
             _log.Info("Disposing of iFix.Crust.ConnectedClient");
@@ -503,6 +517,15 @@ namespace iFix.Crust.Fix44
                 _client.Dispose();
                 _client = null;
             });
+        }
+
+        public Task<bool> RequestMarketData()
+        {
+            lock (_monitor)
+            {
+                if (_client == null || _transition != null) return Task.FromResult(false);
+                return _client.RequestMarketData();
+            }
         }
 
         Task Transition(Action transition)

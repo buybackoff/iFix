@@ -523,5 +523,15 @@ namespace iFix.Crust
         /// asynchronous Dispose().
         /// </summary>
         Task Disconnect();
+
+        /// <summary>
+        /// Requests a snapshot of market data from the exchange. The snapshot will be delivered
+        /// asynchronously to the event callback.
+        /// 
+        /// The task completes with `true` as soon as the request is sent to the exchange (without
+        /// waiting for the reply). If the request can't be send to the exchange (for example, if
+        /// there is no connection), the task completes with `false`.
+        /// </summary>
+        Task<bool> RequestMarketData();
     }
 }
