@@ -347,6 +347,7 @@ namespace iFix.Mantle.Fix44
         public OrigClOrdID OrigClOrdID = new OrigClOrdID();
         public ClOrdID ClOrdID = new ClOrdID();
         public OrderID OrderID = new OrderID();
+        public Instrument Instrument = new Instrument();
         public Side Side = new Side();
         public TransactTime TransactTime = new TransactTime();
 
@@ -357,6 +358,7 @@ namespace iFix.Mantle.Fix44
             yield return OrigClOrdID;
             yield return ClOrdID;
             yield return OrderID;
+            yield return Instrument;
             yield return Side;
             yield return TransactTime;
         }

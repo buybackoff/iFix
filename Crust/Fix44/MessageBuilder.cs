@@ -104,8 +104,13 @@ namespace iFix.Crust.Fix44
         {
             var res = new Mantle.Fix44.OrderCancelRequest() { StandardHeader = StandardHeader() };
             res.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
-            res.OrigClOrdID.Value = res.ClOrdID.Value;  // It's required but ignored.
+            // This field is required. It's treated differently by different exchanges:
+            // - MOEX ignores this field (it it'll reject the request if the field isn't set).
+            // - OKcoin uses this field to identify the order. Note that they want OrderID (!) there.
+            res.OrigClOrdID.Value = orderID;
+            // MOEX identifies the order based on this field. OKcoin ignores this field.
             res.OrderID.Value = orderID;
+            res.Instrument.Symbol.Value = request.Symbol;
             res.Side.Value = request.Side == Side.Buy ? '1' : '2';
             res.TransactTime.Value = res.StandardHeader.SendingTime.Value;
             return res;
