@@ -81,6 +81,18 @@ namespace iFix.Crust.Fix44
         /// Request market data for the specified symbols.
         /// </summary>
         public List<string> MarketDataSymbols = new List<string>();
+
+        /// <summary>
+        /// OKcoin sometimes sends us messages with bogus lists of live trades.
+        /// Such messages usually have a lot of trades (e.g., 60) and ideally we want
+        /// to ignore all trades from them. Unfortunately, the bogus messages have all
+        /// the same tags as regular messages; the only thing that distinguishes them
+        /// is the high number of trades.
+        /// 
+        /// If MaxTradesPerIncomingMessage is positive, iFix will ignore incoming messages
+        /// that have more than the specified number of trades.
+        /// </summary>
+        public int MaxTradesPerIncomingMessage = 10;
     }
 
     // What should be done with the order if an attempt to replace it is rejected?
@@ -298,6 +310,12 @@ namespace iFix.Crust.Fix44
 
         void RaiseOrderEvent(OrderState state, Fill fill, MarketData marketData = null)
         {
+            if (_cfg.MaxTradesPerIncomingMessage > 0 && marketData != null && marketData.Trades != null &&
+                marketData.Trades.Count > _cfg.MaxTradesPerIncomingMessage)
+            {
+                _log.Info("Incoming message has too many trades. Probably bogus data. Ignoring it.");
+                marketData.Trades = null;
+            }
             if (state != null || fill != null || marketData != null)
             {
                 var e = new OrderEvent() { State = state, Fill = fill, MarketData = marketData };
