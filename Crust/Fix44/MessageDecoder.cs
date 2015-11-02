@@ -222,6 +222,8 @@ namespace iFix.Crust.Fix44
                 _log.Warn("OrderCancelReject is missing ClOrdID");
             // 0: Too late to cancel.
             // 1: Unknown order.
+            // OKcoin doesn't document this field but they actually support it.
+            // It's important for iFix.
             if (msg.CxlRejReason.HasValue && (msg.CxlRejReason.Value == 0 || msg.CxlRejReason.Value == 1))
                 res.Order.Value.Status = OrderStatus.Finished;
             return res;
