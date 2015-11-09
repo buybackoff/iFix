@@ -93,6 +93,12 @@ namespace iFix.Crust.Fix44
         /// that have more than the specified number of trades.
         /// </summary>
         public int MaxTradesPerIncomingMessage = 0;
+
+        /// <summary>
+        /// Does the exchange allow orders to be moved? If set to false, IOrderCtrl.Replace()
+        /// will always return false, while IOrcerCtrl.ReplaceOrCancel() will always cancel.
+        /// </summary>
+        public bool ReplaceEnabled = true;
     }
 
     // What should be done with the order if an attempt to replace it is rejected?
@@ -392,6 +398,20 @@ namespace iFix.Crust.Fix44
         {
             try
             {
+                if (!_cfg.ReplaceEnabled)
+                {
+                    switch (onReject)
+                    {
+                        case OnReplaceReject.Keep:
+                            _log.Info("Order Replace() requested but the exchange doesn't support moves. Doing nothing.");
+                            return false;
+                        case OnReplaceReject.Cancel:
+                            _log.Info("Order ReplaceOrCancel() requested but the exchange doesn't support moves. Just cancelling.");
+                            return Cancel(order, request);
+                    }
+                    Debug.Assert(false, "Unreachable");
+                }
+
                 if (order.IsPending)
                 {
                     _log.Info("Can't replace order with a pending request", order);
