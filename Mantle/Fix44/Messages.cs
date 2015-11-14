@@ -53,6 +53,7 @@ namespace iFix.Mantle.Fix44
     public interface IClientMessageVisitor<T>
     {
         T Visit(Logon msg);
+        T Visit(Logout msg);
         T Visit(TestRequest msg);
         T Visit(Heartbeat msg);
         T Visit(Reject msg);
@@ -72,6 +73,7 @@ namespace iFix.Mantle.Fix44
     public interface IServerMessageVisitor<T>
     {
         T Visit(Logon msg);
+        T Visit(Logout msg);
         T Visit(TestRequest msg);
         T Visit(Heartbeat msg);
         T Visit(Reject msg);
@@ -110,6 +112,7 @@ namespace iFix.Mantle.Fix44
         static IMessage NewMessage(MsgType msgType)
         {
             if (msgType.Value == Logon.MsgType.Value) return new Logon();
+            if (msgType.Value == Logout.MsgType.Value) return new Logout();
             if (msgType.Value == TestRequest.MsgType.Value) return new TestRequest();
             if (msgType.Value == Heartbeat.MsgType.Value) return new Heartbeat();
             if (msgType.Value == Reject.MsgType.Value) return new Reject();
@@ -166,6 +169,28 @@ namespace iFix.Mantle.Fix44
             yield return ResetSeqNumFlag;
             yield return Username;
             yield return Password;
+        }
+
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Logon <5>: http://www.onixs.biz/fix-dictionary/4.4/msgType_5_5.html.
+    public class Logout : Message, IClientMessage, IServerMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "5" };
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
         }
 
         public T Visit<T>(IClientMessageVisitor<T> visitor)

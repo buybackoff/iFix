@@ -193,6 +193,12 @@ namespace iFix.Crust.Fix44
         public IncomingMessage Visit(Mantle.Fix44.ResendRequest msg) { return null; }
         public IncomingMessage Visit(Mantle.Fix44.OrderMassCancelReport msg) { return null; }
 
+        public IncomingMessage Visit(Mantle.Fix44.Logout msg)
+        {
+            _log.Warn("Received Logout from the exchange. Expect the connection to break!");
+            return null;
+        }
+
         public IncomingMessage Visit(Mantle.Fix44.Heartbeat msg) {
             if (!msg.TestReqID.HasValue) return null;
             var res = new IncomingMessage();
