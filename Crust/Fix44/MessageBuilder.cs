@@ -12,6 +12,12 @@ namespace iFix.Crust.Fix44
         readonly ClientConfig _cfg;
         readonly ClOrdIDGenerator _clOrdIDGenerator;
 
+        public enum MarketDataType
+        {
+            Order,
+            Trade,
+        }
+
         public MessageBuilder(ClientConfig cfg)
         {
             _cfg = cfg;
@@ -34,27 +40,29 @@ namespace iFix.Crust.Fix44
             return res;
         }
 
-        public Mantle.Fix44.MarketDataRequest[] MarketDataRequest(string symbol)
+        public Mantle.Fix44.MarketDataRequest MarketDataRequest(string symbol, MarketDataType type)
         {
-            // We need to request a snapshot of bids ('0'), a snapshot of asks ('1'), and live trades ('2').
-            // OKcoin doesn't allow all three to be sent in a single message. Thus we send one message
-            // with MDEntryTypes = {'0', '1'} and then another one with MDEntryTypes = {'2'}.
-            char[][] mdEntryTypes = { new[] { '0', '1' }, new[] { '2' } };
-            Mantle.Fix44.MarketDataRequest[] res = new Mantle.Fix44.MarketDataRequest[mdEntryTypes.Length];
-            for (int i = 0; i != res.Length; ++i)
+            var res = new Mantle.Fix44.MarketDataRequest();
+            res = new Mantle.Fix44.MarketDataRequest() { StandardHeader = StandardHeader() };
+            var instrument = new Mantle.Fix44.Instrument();
+            instrument.Symbol.Value = symbol;
+            res.RelatedSym.Add(instrument);
+            res.MDReqID.Value = Guid.NewGuid().ToString();
+            res.SubscriptionRequestType.Value = '1';
+            res.MarketDepth.Value = 0;
+            res.MDUpdateType.Value = 1;
+            switch (type)
             {
-                res[i] = new Mantle.Fix44.MarketDataRequest() { StandardHeader = StandardHeader() };
-                var instrument = new Mantle.Fix44.Instrument();
-                instrument.Symbol.Value = symbol;
-                res[i].RelatedSym.Add(instrument);
-                res[i].MDReqID.Value = Guid.NewGuid().ToString();
-                res[i].SubscriptionRequestType.Value = '1';
-                res[i].MarketDepth.Value = 0;
-                res[i].MDUpdateType.Value = 1;
-                foreach (char c in mdEntryTypes[i])
-                {
-                    res[i].MDEntryTypes.Add(new Mantle.Fix44.MDEntryType() { Value = c });
-                }
+                case MarketDataType.Order:
+                    // Bids.
+                    res.MDEntryTypes.Add(new Mantle.Fix44.MDEntryType() { Value = '0' });
+                    // Asks.
+                    res.MDEntryTypes.Add(new Mantle.Fix44.MDEntryType() { Value = '1' });
+                    break;
+                case MarketDataType.Trade:
+                    // Live trades.
+                    res.MDEntryTypes.Add(new Mantle.Fix44.MDEntryType() { Value = '2' });
+                    break;
             }
             return res;
         }

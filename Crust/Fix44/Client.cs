@@ -215,8 +215,10 @@ namespace iFix.Crust.Fix44
                 if (!(session.Receive(cancel).Result is Mantle.Fix44.Logon))
                     throw new UnexpectedMessageReceived("Expected Logon");
                 foreach (string symbol in _cfg.MarketDataSymbols)
-                    foreach (var msg in _messageBuilder.MarketDataRequest(symbol))
-                        session.Send(msg);
+                {
+                    session.Send(_messageBuilder.MarketDataRequest(symbol, MessageBuilder.MarketDataType.Order));
+                    session.Send(_messageBuilder.MarketDataRequest(symbol, MessageBuilder.MarketDataType.Trade));
+                }
             }));
             _messagePump = new MessagePump(
                 _connection,
@@ -240,9 +242,8 @@ namespace iFix.Crust.Fix44
             var res = new Task<bool>(() =>
             {
                 foreach (string symbol in _cfg.MarketDataSymbols)
-                    foreach (var msg in _messageBuilder.MarketDataRequest(symbol))
-                        if (_connection.Send(msg) == null)
-                            return false;
+                    if (_connection.Send(_messageBuilder.MarketDataRequest(symbol, MessageBuilder.MarketDataType.Order)) == null)
+                        return false;
                 return true;
             });
             _scheduler.Schedule(() => res.RunSynchronously());
