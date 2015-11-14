@@ -341,11 +341,13 @@ namespace iFix.Mantle.Fix44
         public Account Account = new Account();
         public TradingSessionIDGroup TradingSessionIDGroup = new TradingSessionIDGroup();
         public Instrument Instrument = new Instrument();
+        public TimeInForce TimeInForce = new TimeInForce();
         public Side Side = new Side();
         public TransactTime TransactTime = new TransactTime();
         public OrderQtyData OrderQtyData = new OrderQtyData();
         public OrdType OrdType = new OrdType();
         public Price Price = new Price();
+        public ExpireTime ExpireTime = new ExpireTime();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
@@ -356,11 +358,13 @@ namespace iFix.Mantle.Fix44
             yield return Account;
             yield return TradingSessionIDGroup;
             yield return Instrument;
+            yield return TimeInForce;
             yield return Side;
             yield return TransactTime;
             yield return OrderQtyData;
             yield return OrdType;
             yield return Price;
+            yield return ExpireTime;
         }
 
         public T Visit<T>(IClientMessageVisitor<T> visitor)

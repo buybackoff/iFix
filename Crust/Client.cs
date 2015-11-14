@@ -516,6 +516,12 @@ namespace iFix.Crust
         /// </summary>
         public decimal? Price;
 
+        /// <summary>
+        /// If set, the order will be automatically cancelled if it's still active
+        /// after the specified time.
+        /// </summary>
+        public TimeSpan? TimeToLive;
+
         public object Clone()
         {
             return MemberwiseClone();

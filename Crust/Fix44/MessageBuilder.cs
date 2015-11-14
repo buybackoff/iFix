@@ -105,6 +105,11 @@ namespace iFix.Crust.Fix44
             res.OrdType.Value = request.OrderType == OrderType.Market ? '1' : '2';
             if (request.Price.HasValue)
                 res.Price.Value = request.Price.Value;
+            if (request.TimeToLive.HasValue)
+            {
+                res.TimeInForce.Value = '6';  // Good Till Date
+                res.ExpireTime.Value = DateTime.UtcNow + request.TimeToLive.Value;
+            }
             return res;
         }
 

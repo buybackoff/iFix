@@ -137,6 +137,16 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 44; } }
     }
 
+    public class TimeInForce : CharField
+    {
+        protected override int Tag { get { return 59; } }
+    }
+
+    public class ExpireTime : TimestampField
+    {
+        protected override int Tag { get { return 126; } }
+    }
+
     public class OrderID : StringField
     {
         protected override int Tag { get { return 37; } }
