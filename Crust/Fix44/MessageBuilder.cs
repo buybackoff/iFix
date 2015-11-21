@@ -47,7 +47,9 @@ namespace iFix.Crust.Fix44
             var instrument = new Mantle.Fix44.Instrument();
             instrument.Symbol.Value = symbol;
             res.RelatedSym.Add(instrument);
-            res.MDReqID.Value = Guid.NewGuid().ToString();
+            // It's important for huobi that MDReqID has symbol as its prefix. Otherwise they'll
+            // silently ignore our request. This is undocumented.
+            res.MDReqID.Value = symbol + Guid.NewGuid().ToString();
             res.SubscriptionRequestType.Value = '1';
             res.MarketDepth.Value = 0;
             res.MDUpdateType.Value = 1;
