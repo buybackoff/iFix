@@ -320,24 +320,29 @@ namespace iFix.Crust.Fix44
             res.MarketData.Value.Symbol = msg.Instrument.Symbol.Value;
             foreach (Mantle.Fix44.MDEntry entry in msg.MDEntries)
             {
-                MarketOrder order;
                 string error;
-                switch (MakeOrder(entry, out order, out error))
+                MarketOrder order = MakeOrder(entry, out error);
+                if (order != null)
                 {
-                    case MDEntryType.Invalid:
-                        _log.Warn("{0}: {1}", error, msg);
-                        break;
-                    case MDEntryType.Order:
-                        if (res.MarketData.Value.Snapshot == null)
-                            res.MarketData.Value.Snapshot = new List<MarketOrder>();
-                        res.MarketData.Value.Snapshot.Add(order);
-                        break;
-                    case MDEntryType.Trade:
-                        if (res.MarketData.Value.Trades == null)
-                            res.MarketData.Value.Trades = new List<MarketOrder>();
-                        res.MarketData.Value.Trades.Add(order);
-                        break;
+                    if (res.MarketData.Value.Snapshot == null)
+                        res.MarketData.Value.Snapshot = new List<MarketOrder>();
+                    res.MarketData.Value.Snapshot.Add(order);
+                    continue;
                 }
+                if (error != null)
+                {
+                    _log.Warn("{0}: {1}", error, msg);
+                    continue;
+                }
+                MarketTrade trade = MakeTrade(entry, out error);
+                if (trade != null)
+                {
+                    if (res.MarketData.Value.Trades == null)
+                        res.MarketData.Value.Trades = new List<MarketTrade>();
+                    res.MarketData.Value.Trades.Add(trade);
+                    continue;
+                }
+                _log.Warn("Ignoring MDEntry of unkonwn format: {0}", msg);
             }
             return res;
         }
@@ -359,47 +364,45 @@ namespace iFix.Crust.Fix44
             res.MarketData.Value.Symbol = msg.Instrument.Symbol.Value;
             foreach (Mantle.Fix44.MDEntry entry in msg.MDEntries)
             {
-                MarketOrder order;
                 string error;
-                switch (MakeOrder(entry, out order, out error))
+                MarketOrder order = MakeOrder(entry, out error);
+                if (order != null)
                 {
-                    case MDEntryType.Invalid:
-                        _log.Warn("{0}: {1}", error, msg);
+                    var diff = new MarketOrderDiff();
+                    diff.Order = order;
+                    if (!entry.MDUpdateAction.HasValue)
+                    {
+                        _log.Warn("Missing MDUpdateAction field: {0}", msg);
                         break;
-                    case MDEntryType.Trade:
-                        _log.Warn("MarketDataIncrementalRefresh cannot contain trades: {0}", msg);
+                    }
+                    else if (entry.MDUpdateAction.Value == '0')
+                    {
+                        diff.Type = DiffType.New;
+                    }
+                    else if (entry.MDUpdateAction.Value == '1')
+                    {
+                        diff.Type = DiffType.Change;
+                    }
+                    else if (entry.MDUpdateAction.Value == '2')
+                    {
+                        diff.Type = DiffType.Delete;
+                    }
+                    else
+                    {
+                        _log.Warn("Invalid value of MDUpdateAction {0}: {1}", entry.MDUpdateAction.Value, msg);
                         break;
-                    case MDEntryType.Order:
-                        var diff = new MarketOrderDiff();
-                        diff.Order = order;
-                        if (!entry.MDUpdateAction.HasValue)
-                        {
-                            _log.Warn("Missing MDUpdateAction field: {0}", msg);
-                            break;
-                        }
-                        else if (entry.MDUpdateAction.Value == '0')
-                        {
-                            diff.Type = DiffType.New;
-                        }
-                        else if (entry.MDUpdateAction.Value == '1')
-                        {
-                            diff.Type = DiffType.Change;
-                        }
-                        else if (entry.MDUpdateAction.Value == '2')
-                        {
-                            diff.Type = DiffType.Delete;
-                        }
-                        else
-                        {
-                            _log.Warn("Invalid value of MDUpdateAction {0}: {1}", entry.MDUpdateAction.Value, msg);
-                            break;
-                        }
-                        if (res.MarketData.Value.Diff == null)
-                            res.MarketData.Value.Diff = new List<MarketOrderDiff>();
-                        res.MarketData.Value.Diff.Add(diff);
-                        break;
-
+                    }
+                    if (res.MarketData.Value.Diff == null)
+                        res.MarketData.Value.Diff = new List<MarketOrderDiff>();
+                    res.MarketData.Value.Diff.Add(diff);
+                    continue;
                 }
+                if (error != null)
+                {
+                    _log.Warn("{0}: {1}", error, msg);
+                    continue;
+                }
+                _log.Warn("Ignoring MDEntry of unkonwn format: {0}", msg);
             }
             return res;
         }
@@ -443,66 +446,72 @@ namespace iFix.Crust.Fix44
             return res;
         }
 
-        enum MDEntryType
+        // Three possible outcomes:
+        // - Result is not null. That's success. In this case error is guaranteed to be null.
+        // - Result is null, error is null. It means the entry isn't a trade. Not an error.
+        // - Result is null, error is not null. That's an error.
+        static MarketTrade MakeTrade(Mantle.Fix44.MDEntry entry, out string error)
         {
-            Invalid,
-            Order,
-            Trade,
-        }
-
-        static MDEntryType MakeOrder(Mantle.Fix44.MDEntry entry, out MarketOrder order, out string error)
-        {
-            order = new MarketOrder();
+            var res = new MarketTrade();
             error = null;
-            if (!entry.MDEntryPx.HasValue)
-            {
-                error = "Missing MDEntryPx field";
-                return MDEntryType.Invalid;
-            }
-            order.Price = entry.MDEntryPx.Value;
-            if (!entry.MDEntrySize.HasValue)
-            {
-                error = "Missing MDEntrySize field";
-                return MDEntryType.Invalid;
-            }
-            order.Quantity = entry.MDEntrySize.Value;
+
             if (!entry.MDEntryType.HasValue)
             {
                 error = "Missing MDEntryType field";
-                return MDEntryType.Invalid;
+                return null;
             }
-            switch (entry.MDEntryType.Value)
+
+            if (entry.MDEntryType.Value != '2') return null;  // No error.
+
+            if (!entry.MDEntryPx.HasValue)
             {
-                case '0':
-                    order.Side = Side.Buy;
-                    return MDEntryType.Order;
-                case '1':
-                    order.Side = Side.Sell;
-                    return MDEntryType.Order;
-                case '2':
-                    if (!entry.Side.HasValue)
-                    {
-                        error = "Missing Side field";
-                        return MDEntryType.Invalid;
-                    }
-                    if (entry.Side.Value == '1')
-                    {
-                        order.Side = Side.Buy;
-                    }
-                    else if (entry.Side.Value == '2')
-                    {
-                        order.Side = Side.Sell;
-                    }
-                    else
-                    {
-                        error = String.Format("Invalid value of Side: {0}", entry.Side.Value);
-                        return MDEntryType.Invalid;
-                    }
-                    return MDEntryType.Trade;
-                default:
-                    error = String.Format("Invalid value of MDEntryType: {0}", entry.MDEntryType.Value);
-                    return MDEntryType.Invalid;
+                error = "Missing MDEntryPx field";
+                return null;
             }
+            res.Price = entry.MDEntryPx.Value;
+            if (!entry.MDEntrySize.HasValue)
+            {
+                error = "Missing MDEntrySize field";
+                return null;
+            }
+            res.Quantity = entry.MDEntrySize.Value;
+
+            return res;
+        }
+
+        // Three possible outcomes:
+        // - Result is not null. That's success. In this case error is guaranteed to be null.
+        // - Result is null, error is null. It means the entry isn't an order. Not an error.
+        // - Result is null, error is not null. That's an error.
+        static MarketOrder MakeOrder(Mantle.Fix44.MDEntry entry, out string error)
+        {
+            var res = new MarketOrder();
+            error = null;
+
+            if (!entry.MDEntryType.HasValue)
+            {
+                error = "Missing MDEntryType field";
+                return null;
+            }
+
+            if (entry.MDEntryType.Value == '0') res.Side = Side.Buy;
+            else if (entry.MDEntryType.Value == '1') res.Side = Side.Sell;
+            else return null;  // No error.
+
+            if (!entry.MDEntryPx.HasValue)
+            {
+                error = "Missing MDEntryPx field";
+                return null;
+            }
+            res.Price = entry.MDEntryPx.Value;
+            if (!entry.MDEntrySize.HasValue)
+            {
+                error = "Missing MDEntrySize field";
+                return null;
+            }
+            res.Quantity = entry.MDEntrySize.Value;
+
+            return res;
         }
     }
 }
