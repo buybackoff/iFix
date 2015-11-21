@@ -4,15 +4,26 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace iFix.Crust
 {
-    public enum ConnectionType
+    public class SslOptions
     {
-        Insecure,
-        Secure,
+        // The default is host name (the constructor argument of TcpConnection).
+        public string CertificateName = null;
+        // If not set, it'll be loaded from the certificate store. (I think.)
+        public string CertificateFilename = null;
+        // Must be set iff CertificateFilename is set.
+        public string CertificateFilePassword = null;
+        // Allow expired certificates provided that they are otherwise valid.
+        // Enable it if the server you are connecting to doesn't care about renewing certificates.
+        public bool AllowExpiredCertificate = false;
+        // Allow certificate chains that can't be built to a trusted root authority.
+        // Enable it if you are OK with shady self issued certificates.
+        public bool AllowPartialChain = false;
     }
 
     class TcpConnection : IConnection
@@ -24,28 +35,59 @@ namespace iFix.Crust
         Stream _strm;
         long _lastSeqNum = 0;
 
-        public TcpConnection(string host, int port, ConnectionType type)
+        // Establishes SSL connection iff ssl is not null.
+        public TcpConnection(string host, int port, SslOptions ssl)
         {
             _log.Info("Connecting to {0}:{1}...", host, port);
             _client = new TcpClient(host, port);
-            switch (type)
+            if (ssl == null)
             {
-                case ConnectionType.Insecure:
-                    _strm = _client.GetStream();
-                    break;
-                case ConnectionType.Secure:
-                    try
+                _strm = _client.GetStream();
+            }
+            else
+            {
+                try
+                {
+                    RemoteCertificateValidationCallback cb =
+                        (object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors errors) =>
                     {
-                        var ssl = new SslStream(_client.GetStream(), false);
-                        ssl.AuthenticateAsClient(host);
-                        _strm = ssl;
-                    }
-                    catch
-                    {
-                        Dispose();
-                        throw;
-                    }
-                    break;
+                        if (errors == SslPolicyErrors.None)
+                            return true;
+                        if (errors != SslPolicyErrors.RemoteCertificateChainErrors)
+                        {
+                            _log.Error("SSL handshake error: {0}", errors);
+                            return false;
+                        }
+                        foreach (X509ChainStatus ch in chain.ChainStatus)
+                        {
+                            if (ch.Status == X509ChainStatusFlags.NotTimeValid && ssl.AllowExpiredCertificate)
+                            {
+                                _log.Warn("Ignoring NotTimeValid error in SSL handshake.");
+                                continue;
+                            }
+                            if (ch.Status == X509ChainStatusFlags.PartialChain)
+                            {
+                                _log.Warn("Ignoring PartialChain error in SSL handshake.");
+                                continue;
+                            }
+                            _log.Error("SSL handshake error: {0} {1}", ch.Status, ch.StatusInformation);
+                            return false;
+                        }
+                        return true;
+                    };
+                    var sslStrm = new SslStream(_client.GetStream(), false, cb);
+                    var certs = new X509CertificateCollection();
+                    if (ssl.CertificateFilename != null)
+                        certs.Add(new X509Certificate(ssl.CertificateFilename, ssl.CertificateFilePassword));
+                    sslStrm.AuthenticateAsClient(ssl.CertificateName ?? host, certs,
+                                                 System.Security.Authentication.SslProtocols.Default, checkCertificateRevocation: false);
+                    _strm = sslStrm;
+                }
+                catch
+                {
+                    Dispose();
+                    throw;
+                }
             }
             var protocols = new Dictionary<string, Mantle.IMessageFactory>() {
                 { Mantle.Fix44.Protocol.Value, new Mantle.Fix44.MessageFactory() }
@@ -85,18 +127,18 @@ namespace iFix.Crust
     {
         readonly string _host;
         readonly int _port;
-        readonly ConnectionType _type;
+        readonly SslOptions _ssl;
 
-        public TcpConnector(string host, int port, ConnectionType type = ConnectionType.Insecure)
+        public TcpConnector(string host, int port, SslOptions ssl = null)
         {
             _host = host;
             _port = port;
-            _type = type;
+            _ssl = ssl;
         }
 
         public Task<IConnection> CreateConnection(CancellationToken cancellationToken)
         {
-            var res = new Task<IConnection>(() => new TcpConnection(_host, _port, _type));
+            var res = new Task<IConnection>(() => new TcpConnection(_host, _port, _ssl));
             res.Start();
             return res;
         }
