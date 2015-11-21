@@ -84,15 +84,15 @@ namespace iFix.Crust.Fix44
 
         /// <summary>
         /// OKcoin sometimes sends us messages with bogus lists of live trades.
-        /// Such messages usually have a lot of trades (e.g., 60) and ideally we want
+        /// Such messages usually have a fixed number of trades (e.g., 60) and ideally we want
         /// to ignore all trades from them. Unfortunately, the bogus messages have all
         /// the same tags as regular messages; the only thing that distinguishes them
-        /// is the high number of trades.
+        /// is the number of trades.
         /// 
-        /// If MaxTradesPerIncomingMessage is positive, iFix will ignore incoming messages
-        /// that have more than the specified number of trades.
+        /// If FakeTradeCount is positive, iFix will ignore incoming messages
+        /// that have exactly that many trades in them.
         /// </summary>
-        public int MaxTradesPerIncomingMessage = 0;
+        public int FakeTradeCount = 0;
 
         /// <summary>
         /// Does the exchange allow orders to be moved? If set to false, IOrderCtrl.Replace()
@@ -342,10 +342,10 @@ namespace iFix.Crust.Fix44
         void RaiseOrderEvent(OrderState state = null, Fill fill = null, MarketData marketData = null,
                              AccountInfo accountInfo = null)
         {
-            if (_cfg.MaxTradesPerIncomingMessage > 0 && marketData != null && marketData.Trades != null &&
-                marketData.Trades.Count > _cfg.MaxTradesPerIncomingMessage)
+            if (_cfg.FakeTradeCount > 0 && marketData != null && marketData.Trades != null &&
+                marketData.Trades.Count == _cfg.FakeTradeCount)
             {
-                _log.Info("Incoming message has too many trades. Probably bogus data. Ignoring it.");
+                _log.Info("Incoming message has {0} trade(s). Probably bogus data. Ignoring it.", _cfg.FakeTradeCount);
                 marketData.Trades = null;
             }
             if (state != null || fill != null || marketData != null || accountInfo != null)
