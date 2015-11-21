@@ -249,6 +249,33 @@ namespace iFix.Crust
         }
     }
 
+    /// <summary>
+    /// A successful trade transaction between two parties.
+    /// </summary>
+    public class MarketTrade : ICloneable
+    {
+        /// <summary>
+        /// Price at which the transaction is executed, per lot.
+        /// The total price of the transaction is Price * Quantity.
+        /// </summary>
+        public decimal Price;
+
+        /// <summary>
+        /// How big is the transaction, in lots.
+        /// </summary>
+        public decimal Quantity;
+
+        public override string ToString()
+        {
+            return String.Format("(Price = {0}, Quantity = {1})", Price, Quantity);
+        }
+
+        public object Clone()
+        {
+            return MemberwiseClone();
+        }
+    }
+
     public enum DiffType
     {
         New,
@@ -304,7 +331,7 @@ namespace iFix.Crust
         /// <summary>
         /// Trades by third parties together with our own trades.
         /// </summary>
-        public List<MarketOrder> Trades;
+        public List<MarketTrade> Trades;
 
         public override string ToString()
         {
@@ -332,7 +359,7 @@ namespace iFix.Crust
         static void Append(StringBuilder buf, string name, IEnumerable<object> collection)
         {
             if (collection == null || !collection.Any()) return;
-            buf.AppendFormat(", {0} = {1}", name, String.Join(", ", collection.Select(o => o.ToString())));
+            buf.AppendFormat(", {0} = ({1})", name, String.Join(", ", collection.Select(o => o.ToString())));
         }
 
         static List<T> Clone<T>(IEnumerable<T> collection) where T : ICloneable
