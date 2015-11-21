@@ -299,12 +299,19 @@ namespace iFix.Crust.Fix44
         public IncomingMessage Visit(Mantle.Fix44.MarketDataResponse msg)
         {
             var res = new IncomingMessage();
-            if (!msg.OrigTime.HasValue)
+            if (msg.OrigTime.HasValue)
             {
-                _log.Warn("MarketDataResponse is missing OrigTime field: {0}", msg);
+                res.MarketData.Value.ServerTime = msg.OrigTime.Value;
+            }
+            else if (msg.StandardHeader.SendingTime.HasValue)
+            {
+                res.MarketData.Value.ServerTime = msg.StandardHeader.SendingTime.Value;
+            }
+            else
+            {
+                _log.Warn("MarketDataResponse is missing OrigTime and SendingTime fields: {0}", msg);
                 return null;
             }
-            res.MarketData.Value.ServerTime = msg.OrigTime.Value;
             if (!msg.Instrument.Symbol.HasValue)
             {
                 _log.Warn("MarketDataResponse is missing Symbol field: {0}", msg);
