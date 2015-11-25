@@ -478,19 +478,9 @@ namespace iFix.Crust.Fix44
 
             if (entry.Side.HasValue)
             {
-                if (entry.Side.Value == '1')
-                {
-                    res.Side = Side.Buy;
-                }
-                else if (entry.Side.Value == '2')
-                {
-                    res.Side = Side.Sell;
-                }
-                else
-                {
-                    error = "Invalid value of Side field";
-                    return null;
-                }
+                if (entry.Side.Value == '1') res.Side = Side.Buy;
+                else if (entry.Side.Value == '2') res.Side = Side.Sell;
+                else _log.Warn("Unknown value of Side field: {0}", entry.Side.Value);
             }
 
             return res;
