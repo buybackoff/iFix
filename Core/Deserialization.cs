@@ -15,6 +15,9 @@ namespace iFix.Core
         static readonly string TimestampFormatWithMillis = "yyyyMMdd-HH:mm:ss.fff";
         static readonly string TimestampFormatWithoutMillis = "yyyyMMdd-HH:mm:ss";
         static readonly string[] TimestampFormats = { TimestampFormatWithMillis, TimestampFormatWithoutMillis };
+        static readonly string TimeOnlyFormatWithMillis = @"hh\:mm\:ss\.fff";
+        static readonly string TimeOnlyFormatWithoutMillis = @"hh\:mm\:ss";
+        static readonly string[] TimeOnlyFormats = { TimeOnlyFormatWithMillis, TimeOnlyFormatWithoutMillis };
 
         // Static methods ParseXXX() implement deserialization of FIX value types.
         // See http://www.onixs.biz/fix-dictionary/4.4/#DataTypes.
@@ -81,6 +84,11 @@ namespace iFix.Core
         {
             return DateTime.ParseExact(ParseString(bytes), TimestampFormats, CultureInfo.InvariantCulture,
                                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
+        }
+
+        public static TimeSpan ParseTimeOnly(ArraySegment<byte> bytes)
+        {
+            return TimeSpan.ParseExact(ParseString(bytes), TimeOnlyFormats, CultureInfo.InvariantCulture);
         }
 
         // Parses a field from bytes starting from position 'start' and ending at 'end'.

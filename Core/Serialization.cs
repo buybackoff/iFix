@@ -93,6 +93,28 @@ namespace iFix.Core
             return new ArraySegment<byte>(res);
         }
 
+        public static ArraySegment<byte> SerializeTimeOnly(TimeSpan value)
+        {
+            if (value < TimeSpan.Zero)
+                throw new ArgumentException(String.Format("TimeOnly field too small: {0}", value));
+            if (value >= TimeSpan.FromHours(24))
+                throw new ArgumentException(String.Format("TimeOnly field too large: {0}", value));
+            var hour = TwoDigitTable[value.Hours];
+            var minute = TwoDigitTable[value.Minutes];
+            var second = TwoDigitTable[value.Seconds];
+            var millisecond = ThreeDigitTable[value.Milliseconds];
+            // HH:mm:ss.fff
+            byte[] res = new byte[12];
+            hour.CopyTo(res, 0);
+            res[2] = (byte)':';
+            minute.CopyTo(res, 3);
+            res[5] = (byte)':';
+            second.CopyTo(res, 6);
+            res[8] = (byte)'.';
+            millisecond.CopyTo(res, 9);
+            return new ArraySegment<byte>(res);
+        }
+
         // Version is the value of the BeginString<8> tag (e.g., "FIX.4.4").
         // The list of fields should NOT contain tags Version<8>, BodyLength<9> and CheckSum<10>. Those
         // are added automatically. Fields may be traversed more than once by the function and should have
