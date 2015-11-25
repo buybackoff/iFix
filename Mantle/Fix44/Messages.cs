@@ -84,7 +84,7 @@ namespace iFix.Mantle.Fix44
         T Visit(OrderMassCancelReport msg);
         T Visit(MarketDataResponse msg);
         T Visit(MarketDataIncrementalRefresh msg);
-        T Visit(AccountInfoResponse msg);
+        T Visit(OkCoinAccountInfoResponse msg);
     }
 
     // Factory and parser for FIX 4.4 client and server messages.
@@ -130,7 +130,7 @@ namespace iFix.Mantle.Fix44
             if (msgType.Value == MarketDataResponse.MsgType.Value) return new MarketDataResponse();
             if (msgType.Value == MarketDataIncrementalRefresh.MsgType.Value) return new MarketDataIncrementalRefresh();
             if (msgType.Value == OkCoinAccountInfoRequest.MsgType.Value) return new OkCoinAccountInfoRequest();
-            if (msgType.Value == AccountInfoResponse.MsgType.Value) return new AccountInfoResponse();
+            if (msgType.Value == OkCoinAccountInfoResponse.MsgType.Value) return new OkCoinAccountInfoResponse();
             return null;
         }
 
@@ -675,7 +675,7 @@ namespace iFix.Mantle.Fix44
     }
 
     // Account Info Response <Z1001>: OKCoin extension.
-    public class AccountInfoResponse : Message, IServerMessage
+    public class OkCoinAccountInfoResponse : Message, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "Z1001" };
         public Currency Currency = new Currency();

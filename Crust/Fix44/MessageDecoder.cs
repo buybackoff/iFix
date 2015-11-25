@@ -408,7 +408,7 @@ namespace iFix.Crust.Fix44
             return res;
         }
 
-        public IncomingMessage Visit(Mantle.Fix44.AccountInfoResponse msg)
+        public IncomingMessage Visit(Mantle.Fix44.OkCoinAccountInfoResponse msg)
         {
             if (!msg.Currency.HasValue)
             {
