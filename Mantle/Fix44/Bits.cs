@@ -288,7 +288,7 @@ namespace iFix.Mantle.Fix44
     }
 
     // OKCoin extension: Client-assigned unique ID of this request.
-    public class AccReqID : StringField
+    public class OkCoinAccReqID : StringField
     {
         protected override int Tag { get { return 8000; } }
     }
@@ -302,37 +302,37 @@ namespace iFix.Mantle.Fix44
     }
 
     // OKCoin extension. They call it FreeBtc.
-    public class FreeCurrency1 : DecimalField
+    public class OkCoinFreeCurrency1 : DecimalField
     {
         protected override int Tag { get { return 8101; } }
     }
 
     // OKCoin extension. They call it FreeLtc.
-    public class FreeCurrency2 : DecimalField
+    public class OkCoinFreeCurrency2 : DecimalField
     {
         protected override int Tag { get { return 8102; } }
     }
 
     // OKCoin extension. They call it FreeUsd on okcoin.com and FreeCny on okcoin.cn.
-    public class FreeCurrency3 : DecimalField
+    public class OkCoinFreeCurrency3 : DecimalField
     {
         protected override int Tag { get { return 8103; } }
     }
 
     // OKCoin extension. They call it FreezedBtc.
-    public class FrozenCurrency1 : DecimalField
+    public class OkCoinFrozenCurrency1 : DecimalField
     {
         protected override int Tag { get { return 8104; } }
     }
 
     // OKCoin extension. They call it FreezedLtc.
-    public class FrozenCurrency2 : DecimalField
+    public class OkCoinFrozenCurrency2 : DecimalField
     {
         protected override int Tag { get { return 8105; } }
     }
 
     // OKCoin extension. They call it FreezedUsd on okcoin.com and FreezedCny on okcoin.cn.
-    public class FrozenCurrency3 : DecimalField
+    public class OkCoinFrozenCurrency3 : DecimalField
     {
         protected override int Tag { get { return 8106; } }
     }

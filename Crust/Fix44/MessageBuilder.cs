@@ -160,11 +160,11 @@ namespace iFix.Crust.Fix44
             return res;
         }
 
-        public Mantle.Fix44.AccountInfoRequest AccountInfoRequest()
+        public Mantle.Fix44.OkCoinAccountInfoRequest AccountInfoRequest()
         {
-            var res = new Mantle.Fix44.AccountInfoRequest() { StandardHeader = StandardHeader() };
+            var res = new Mantle.Fix44.OkCoinAccountInfoRequest() { StandardHeader = StandardHeader() };
             res.Account.Value = _cfg.Account;
-            res.AccReqID.Value = Guid.NewGuid().ToString();
+            res.OkCoinAccReqID.Value = Guid.NewGuid().ToString();
             return res;
         }
 

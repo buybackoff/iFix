@@ -65,7 +65,7 @@ namespace iFix.Mantle.Fix44
         T Visit(OrderMassCancelRequest msg);
         T Visit(OrderStatusRequest msg);
         T Visit(MarketDataRequest msg);
-        T Visit(AccountInfoRequest msg);
+        T Visit(OkCoinAccountInfoRequest msg);
     }
 
     // FIX client can use this interface to handle all types of messages
@@ -129,7 +129,7 @@ namespace iFix.Mantle.Fix44
             if (msgType.Value == MarketDataRequest.MsgType.Value) return new MarketDataRequest();
             if (msgType.Value == MarketDataResponse.MsgType.Value) return new MarketDataResponse();
             if (msgType.Value == MarketDataIncrementalRefresh.MsgType.Value) return new MarketDataIncrementalRefresh();
-            if (msgType.Value == AccountInfoRequest.MsgType.Value) return new AccountInfoRequest();
+            if (msgType.Value == OkCoinAccountInfoRequest.MsgType.Value) return new OkCoinAccountInfoRequest();
             if (msgType.Value == AccountInfoResponse.MsgType.Value) return new AccountInfoResponse();
             return null;
         }
@@ -654,18 +654,18 @@ namespace iFix.Mantle.Fix44
     }
 
     // Account Info Request <Z1000>: OKCoin extension.
-    public class AccountInfoRequest : Message, IClientMessage
+    public class OkCoinAccountInfoRequest : Message, IClientMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "Z1000" };
         public Account Account = new Account();
-        public AccReqID AccReqID = new AccReqID();
+        public OkCoinAccReqID OkCoinAccReqID = new OkCoinAccReqID();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
             yield return MsgType;
             yield return StandardHeader;
             yield return Account;
-            yield return AccReqID;
+            yield return OkCoinAccReqID;
         }
 
         public T Visit<T>(IClientMessageVisitor<T> visitor)
@@ -679,12 +679,12 @@ namespace iFix.Mantle.Fix44
     {
         public static readonly MsgType MsgType = new MsgType { Value = "Z1001" };
         public Currency Currency = new Currency();
-        public FreeCurrency1 FreeCurrency1 = new FreeCurrency1();
-        public FreeCurrency2 FreeCurrency2 = new FreeCurrency2();
-        public FreeCurrency3 FreeCurrency3 = new FreeCurrency3();
-        public FrozenCurrency1 FrozenCurrency1 = new FrozenCurrency1();
-        public FrozenCurrency2 FrozenCurrency2 = new FrozenCurrency2();
-        public FrozenCurrency3 FrozenCurrency3 = new FrozenCurrency3();
+        public OkCoinFreeCurrency1 FreeCurrency1 = new OkCoinFreeCurrency1();
+        public OkCoinFreeCurrency2 FreeCurrency2 = new OkCoinFreeCurrency2();
+        public OkCoinFreeCurrency3 FreeCurrency3 = new OkCoinFreeCurrency3();
+        public OkCoinFrozenCurrency1 FrozenCurrency1 = new OkCoinFrozenCurrency1();
+        public OkCoinFrozenCurrency2 FrozenCurrency2 = new OkCoinFrozenCurrency2();
+        public OkCoinFrozenCurrency3 FrozenCurrency3 = new OkCoinFrozenCurrency3();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
