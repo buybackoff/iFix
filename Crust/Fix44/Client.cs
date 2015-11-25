@@ -17,6 +17,13 @@ namespace iFix.Crust.Fix44
         public UnexpectedMessageReceived(string msg) : base(msg) { }
     }
 
+    public enum Extensions
+    {
+        None,
+        // okcoin.com and okcoin.cn.
+        OkCoin,
+    }
+
     public class ClientConfig
     {
         /// <summary>
@@ -99,6 +106,12 @@ namespace iFix.Crust.Fix44
         /// will always return false, while IOrcerCtrl.ReplaceOrCancel() will always cancel.
         /// </summary>
         public bool ReplaceEnabled = true;
+
+        /// <summary>
+        /// Some exhanges implement extensions to the FIX protocol. If you want to use them,
+        /// specify which extensions the exchange you are connecting to uses.
+        /// </summary>
+        public Extensions Extensions = Extensions.None;
     }
 
     // What should be done with the order if an attempt to replace it is rejected?

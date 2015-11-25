@@ -6,6 +6,11 @@ using System.Threading.Tasks;
 
 namespace iFix.Crust.Fix44
 {
+    class UnsupportedOperationException : Exception
+    {
+        public UnsupportedOperationException(string msg) : base(msg) { }
+    }
+
     // This class takes care of creating outgoing FIX messages.
     class MessageBuilder
     {
@@ -160,12 +165,19 @@ namespace iFix.Crust.Fix44
             return res;
         }
 
-        public Mantle.Fix44.OkCoinAccountInfoRequest AccountInfoRequest()
+        public Mantle.Fix44.IClientMessage AccountInfoRequest()
         {
-            var res = new Mantle.Fix44.OkCoinAccountInfoRequest() { StandardHeader = StandardHeader() };
-            res.Account.Value = _cfg.Account;
-            res.OkCoinAccReqID.Value = Guid.NewGuid().ToString();
-            return res;
+            switch (_cfg.Extensions)
+            {
+                case Extensions.OkCoin:
+                    var res = new Mantle.Fix44.OkCoinAccountInfoRequest() { StandardHeader = StandardHeader() };
+                    res.Account.Value = _cfg.Account;
+                    res.OkCoinAccReqID.Value = Guid.NewGuid().ToString();
+                    return res;
+            }
+            throw new UnsupportedOperationException(
+                "AccountInfoRequest requires FIX extensions. If your exchange supports this operation, " +
+                "make sure you are passing correct value of iFix.Crust.Fix44.Config.Extensions");
         }
 
         Mantle.Fix44.StandardHeader StandardHeader()
