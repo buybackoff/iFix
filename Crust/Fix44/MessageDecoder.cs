@@ -334,7 +334,8 @@ namespace iFix.Crust.Fix44
                     _log.Warn("{0}: {1}", error, msg);
                     continue;
                 }
-                MarketTrade trade = MakeTrade(entry, out error);
+                // ServerTime was already set above.
+                MarketTrade trade = MakeTrade(res.MarketData.Value.ServerTime, entry, out error);
                 if (trade != null)
                 {
                     if (res.MarketData.Value.Trades == null)
@@ -450,7 +451,7 @@ namespace iFix.Crust.Fix44
         // - Result is not null. That's success. In this case error is guaranteed to be null.
         // - Result is null, error is null. It means the entry isn't a trade. Not an error.
         // - Result is null, error is not null. That's an error.
-        static MarketTrade MakeTrade(Mantle.Fix44.MDEntry entry, out string error)
+        static MarketTrade MakeTrade(DateTime msgTime, Mantle.Fix44.MDEntry entry, out string error)
         {
             var res = new MarketTrade();
             error = null;
@@ -483,7 +484,23 @@ namespace iFix.Crust.Fix44
                 else _log.Warn("Unknown value of Side field: {0}", entry.Side.Value);
             }
 
+            if (entry.MDEntryTime.HasValue)
+            {
+                // Huobi sends MDEntryTime with every trade report but this field contains only
+                // time without the date. We combine it with OrigTime or SendingTime (whichever is present)
+                // to get a full timestamp.
+                res.Timestamp = Combine(msgTime, entry.MDEntryTime.Value);
+            }
+
             return res;
+        }
+
+        static DateTime Combine(DateTime baseTimestamp, TimeSpan timeOnly)
+        {
+            return new int[] { -1, 0, 1 }
+                .Select(n => baseTimestamp.Date + TimeSpan.FromDays(n) + timeOnly)
+                .OrderBy(d => Math.Abs(d.Ticks - baseTimestamp.Ticks))
+                .First();
         }
 
         // Three possible outcomes:

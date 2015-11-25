@@ -202,6 +202,11 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 278; } }
     }
 
+    public class MDEntryTime : TimeOnlyField
+    {
+        protected override int Tag { get { return 273; } }
+    }
+
     public class CancelOrigOnReject : BoolField
     {
         protected override int Tag { get { return 9619; } }
@@ -394,6 +399,7 @@ namespace iFix.Mantle.Fix44
         public MDEntryPx MDEntryPx = new MDEntryPx();
         public MDEntrySize MDEntrySize = new MDEntrySize();
         public Side Side = new Side();
+        public MDEntryTime MDEntryTime = new MDEntryTime();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
@@ -402,6 +408,7 @@ namespace iFix.Mantle.Fix44
             yield return MDEntryPx;
             yield return MDEntrySize;
             yield return Side;
+            yield return MDEntryTime;
         }
     }
 

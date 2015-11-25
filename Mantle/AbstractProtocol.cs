@@ -375,6 +375,18 @@ namespace iFix.Mantle
         }
     }
 
+    public abstract class TimeOnlyField : StructField<TimeSpan>
+    {
+        protected override ArraySegment<byte> Serialize(TimeSpan value)
+        {
+            return Serialization.SerializeTimeOnly(value);
+        }
+        protected override TimeSpan Deserialize(ArraySegment<byte> bytes)
+        {
+            return Deserialization.ParseTimeOnly(bytes);
+        }
+    }
+
     // All FIX messages, regardless of protocol version and dialect, start with
     // Begin String <8>: http://www.onixs.biz/fix-dictionary/4.4/tagNum_8.html.
     public class BeginString : StringField

@@ -265,13 +265,24 @@ namespace iFix.Crust
         /// </summary>
         public decimal Quantity;
 
+        /// <summary>
+        /// TODO: figure out what this field means.
+        /// </summary>
         public Side? Side;
+
+        /// <summary>
+        /// Time of the transaction.
+        /// </summary>
+        public DateTime? Timestamp;
 
         public override string ToString()
         {
-            return Side.HasValue
-                ? String.Format("(Price = {0}, Quantity = {1}, Side = {2})", Price, Quantity, Side.Value)
-                : String.Format("(Price = {0}, Quantity = {1})", Price, Quantity);
+            var res = new StringBuilder();
+            res.AppendFormat("(Price = {0}, Quantity = {1}", Price, Quantity);
+            if (Side.HasValue) res.AppendFormat(", Side = {0}", Side.Value);
+            if (Timestamp.HasValue) res.AppendFormat(", Timestamp = {0}", Timestamp.Value);
+            res.Append(")");
+            return res.ToString();
         }
 
         public object Clone()
