@@ -265,9 +265,13 @@ namespace iFix.Crust
         /// </summary>
         public decimal Quantity;
 
+        public Side? Side;
+
         public override string ToString()
         {
-            return String.Format("(Price = {0}, Quantity = {1})", Price, Quantity);
+            return Side.HasValue
+                ? String.Format("(Price = {0}, Quantity = {1}, Side = {2})", Price, Quantity, Side.Value)
+                : String.Format("(Price = {0}, Quantity = {1})", Price, Quantity);
         }
 
         public object Clone()

@@ -476,6 +476,23 @@ namespace iFix.Crust.Fix44
             }
             res.Quantity = entry.MDEntrySize.Value;
 
+            if (entry.Side.HasValue)
+            {
+                if (entry.Side.Value == '1')
+                {
+                    res.Side = Side.Buy;
+                }
+                else if (entry.Side.Value == '2')
+                {
+                    res.Side = Side.Sell;
+                }
+                else
+                {
+                    error = "Invalid value of Side field";
+                    return null;
+                }
+            }
+
             return res;
         }
 
