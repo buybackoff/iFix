@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -170,10 +171,23 @@ namespace iFix.Crust.Fix44
             switch (_cfg.Extensions)
             {
                 case Extensions.OkCoin:
-                    var res = new Mantle.Fix44.OkCoinAccountInfoRequest() { StandardHeader = StandardHeader() };
-                    res.Account.Value = _cfg.Account;
-                    res.OkCoinAccReqID.Value = Guid.NewGuid().ToString();
-                    return res;
+                    {
+                        var res = new Mantle.Fix44.OkCoinAccountInfoRequest() { StandardHeader = StandardHeader() };
+                        res.Account.Value = _cfg.Account;
+                        res.OkCoinAccReqID.Value = Guid.NewGuid().ToString();
+                        return res;
+                    }
+                case Extensions.Huobi:
+                    {
+                        var res = new Mantle.Fix44.HuobiAccountInfoRequest()
+                        {
+                            StandardHeader = StandardHeader(),
+                            HuobiSignature = HuobiSignature("get_account_info"),
+                        };
+                        res.Account.Value = _cfg.Account;
+                        res.HuobiAccReqID.Value = Guid.NewGuid().ToString();
+                        return res;
+                    }
             }
             throw new UnsupportedOperationException(
                 "AccountInfoRequest requires FIX extensions. If your exchange supports this operation, " +
@@ -187,6 +201,30 @@ namespace iFix.Crust.Fix44
             res.TargetCompID.Value = _cfg.TargetCompID;
             res.SendingTime.Value = DateTime.UtcNow;
             return res;
+        }
+
+        Mantle.Fix44.HuobiSignature HuobiSignature(string method)
+        {
+            var res = new Mantle.Fix44.HuobiSignature();
+            long now = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+            res.HuobiCreated.Value = now;
+            res.HuobiAccessKey.Value = _cfg.Account;
+            res.HuobiSign.Value = Md5Hex(
+                String.Format("access_key={0}&created={1}&method={2}&secret_key={3}",
+                              _cfg.Account, now, method, _cfg.Password));
+            return res;
+        }
+
+        static string Md5Hex(string s)
+        {
+            Console.WriteLine(s);
+            byte[] hash = MD5.Create().ComputeHash(Encoding.ASCII.GetBytes(s));
+            StringBuilder res = new StringBuilder(2 * hash.Length);
+            foreach (byte x in hash)
+            {
+                res.AppendFormat("{0:x2}", x);
+            }
+            return res.ToString();
         }
     }
 }

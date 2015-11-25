@@ -22,6 +22,8 @@ namespace iFix.Crust.Fix44
         None,
         // okcoin.com and okcoin.cn.
         OkCoin,
+        // huobi.com.
+        Huobi,
     }
 
     public class ClientConfig

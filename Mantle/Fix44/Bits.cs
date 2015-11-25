@@ -337,6 +337,27 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 8106; } }
     }
 
+    // Huobi extension: Client-assigned unique ID of this request.
+    public class HuobiAccReqID : StringField
+    {
+        protected override int Tag { get { return 1622; } }
+    }
+
+    public class HuobiCreated : LongField
+    {
+        protected override int Tag { get { return 957; } }
+    }
+
+    public class HuobiAccessKey : StringField
+    {
+        protected override int Tag { get { return 958; } }
+    }
+
+    public class HuobiSign : StringField
+    {
+        protected override int Tag { get { return 959; } }
+    }
+
     // Component blocks: http://www.onixs.biz/fix-dictionary/4.4/#ComponentBlocks.
 
     // BeginString, BodyLength and MsgType are intentionally missing.
@@ -409,6 +430,20 @@ namespace iFix.Mantle.Fix44
             yield return MDEntrySize;
             yield return Side;
             yield return MDEntryTime;
+        }
+    }
+
+    public class HuobiSignature : FieldSet
+    {
+        public HuobiCreated HuobiCreated = new HuobiCreated();
+        public HuobiAccessKey HuobiAccessKey = new HuobiAccessKey();
+        public HuobiSign HuobiSign = new HuobiSign();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return HuobiCreated;
+            yield return HuobiAccessKey;
+            yield return HuobiSign;
         }
     }
 

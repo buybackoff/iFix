@@ -8,7 +8,7 @@ using System.Text;
 namespace iFix.Mantle.Fix44
 {
     // Message is missing MsgType<35> tag.
-    public class MsgTypeNotFoundException : Exception {}
+    public class MsgTypeNotFoundException : Exception { }
 
     // FIX.4.4 message.
     public interface IMessage : Mantle.IMessage
@@ -66,6 +66,7 @@ namespace iFix.Mantle.Fix44
         T Visit(OrderStatusRequest msg);
         T Visit(MarketDataRequest msg);
         T Visit(OkCoinAccountInfoRequest msg);
+        T Visit(HuobiAccountInfoRequest msg);
     }
 
     // FIX client can use this interface to handle all types of messages
@@ -131,6 +132,7 @@ namespace iFix.Mantle.Fix44
             if (msgType.Value == MarketDataIncrementalRefresh.MsgType.Value) return new MarketDataIncrementalRefresh();
             if (msgType.Value == OkCoinAccountInfoRequest.MsgType.Value) return new OkCoinAccountInfoRequest();
             if (msgType.Value == OkCoinAccountInfoResponse.MsgType.Value) return new OkCoinAccountInfoResponse();
+            if (msgType.Value == HuobiAccountInfoRequest.MsgType.Value) return new HuobiAccountInfoRequest();
             return null;
         }
 
@@ -700,6 +702,29 @@ namespace iFix.Mantle.Fix44
         }
 
         public T Visit<T>(IServerMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Account Info Request <Z1000>: Huobi extension.
+    public class HuobiAccountInfoRequest : Message, IClientMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "Z1000" };
+        public Account Account = new Account();
+        public HuobiAccReqID HuobiAccReqID = new HuobiAccReqID();
+        public HuobiSignature HuobiSignature = new HuobiSignature();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return Account;
+            yield return HuobiAccReqID;
+            yield return HuobiSignature;
+        }
+
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
         {
             return visitor.Visit(this);
         }
