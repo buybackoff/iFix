@@ -85,7 +85,7 @@ namespace iFix.Mantle.Fix44
         T Visit(OrderMassCancelReport msg);
         T Visit(MarketDataResponse msg);
         T Visit(MarketDataIncrementalRefresh msg);
-        T Visit(OkCoinAccountInfoResponse msg);
+        T Visit(AccountInfoResponse msg);
     }
 
     // Factory and parser for FIX 4.4 client and server messages.
@@ -131,7 +131,7 @@ namespace iFix.Mantle.Fix44
             if (msgType.Value == MarketDataResponse.MsgType.Value) return new MarketDataResponse();
             if (msgType.Value == MarketDataIncrementalRefresh.MsgType.Value) return new MarketDataIncrementalRefresh();
             if (msgType.Value == OkCoinAccountInfoRequest.MsgType.Value) return new OkCoinAccountInfoRequest();
-            if (msgType.Value == OkCoinAccountInfoResponse.MsgType.Value) return new OkCoinAccountInfoResponse();
+            if (msgType.Value == AccountInfoResponse.MsgType.Value) return new AccountInfoResponse();
             if (msgType.Value == HuobiAccountInfoRequest.MsgType.Value) return new HuobiAccountInfoRequest();
             return null;
         }
@@ -339,6 +339,7 @@ namespace iFix.Mantle.Fix44
     {
         public static readonly MsgType MsgType = new MsgType { Value = "D" };
         public ClOrdID ClOrdID = new ClOrdID();
+        public HuobiSignature HuobiSignature = new HuobiSignature();
         public PartyGroup PartyGroup = new PartyGroup();
         public Account Account = new Account();
         public TradingSessionIDGroup TradingSessionIDGroup = new TradingSessionIDGroup();
@@ -347,6 +348,7 @@ namespace iFix.Mantle.Fix44
         public Side Side = new Side();
         public TransactTime TransactTime = new TransactTime();
         public OrderQtyData OrderQtyData = new OrderQtyData();
+        public MinQty MinQty = new MinQty();
         public OrdType OrdType = new OrdType();
         public Price Price = new Price();
         public ExpireTime ExpireTime = new ExpireTime();
@@ -356,6 +358,7 @@ namespace iFix.Mantle.Fix44
             yield return MsgType;
             yield return StandardHeader;
             yield return ClOrdID;
+            yield return HuobiSignature;
             yield return PartyGroup;
             yield return Account;
             yield return TradingSessionIDGroup;
@@ -364,6 +367,7 @@ namespace iFix.Mantle.Fix44
             yield return Side;
             yield return TransactTime;
             yield return OrderQtyData;
+            yield return MinQty;
             yield return OrdType;
             yield return Price;
             yield return ExpireTime;
@@ -677,9 +681,10 @@ namespace iFix.Mantle.Fix44
     }
 
     // Account Info Response <Z1001>: OKCoin extension.
-    public class OkCoinAccountInfoResponse : Message, IServerMessage
+    public class AccountInfoResponse : Message, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "Z1001" };
+        // OkCoin tags.
         public Currency Currency = new Currency();
         public OkCoinFreeCurrency1 FreeCurrency1 = new OkCoinFreeCurrency1();
         public OkCoinFreeCurrency2 FreeCurrency2 = new OkCoinFreeCurrency2();
@@ -687,6 +692,13 @@ namespace iFix.Mantle.Fix44
         public OkCoinFrozenCurrency1 FrozenCurrency1 = new OkCoinFrozenCurrency1();
         public OkCoinFrozenCurrency2 FrozenCurrency2 = new OkCoinFrozenCurrency2();
         public OkCoinFrozenCurrency3 FrozenCurrency3 = new OkCoinFrozenCurrency3();
+        // Huobi tags.
+        public HuobiAvailableCny HuobiAvailableCny = new HuobiAvailableCny();
+        public HuobiAvailableBtc HuobiAvailableBtc = new HuobiAvailableBtc();
+        public HuobiAvailableLtc HuobiAvailableLtc = new HuobiAvailableLtc();
+        public HuobiFrozenCny HuobiFrozenCny = new HuobiFrozenCny();
+        public HuobiFrozenBtc HuobiFrozenBtc = new HuobiFrozenBtc();
+        public HuobiFrozenLtc HuobiFrozenLtc = new HuobiFrozenLtc();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
@@ -699,6 +711,12 @@ namespace iFix.Mantle.Fix44
             yield return FrozenCurrency1;
             yield return FrozenCurrency2;
             yield return FrozenCurrency3;
+            yield return HuobiAvailableCny;
+            yield return HuobiAvailableBtc;
+            yield return HuobiAvailableLtc;
+            yield return HuobiFrozenCny;
+            yield return HuobiFrozenBtc;
+            yield return HuobiFrozenLtc;
         }
 
         public T Visit<T>(IServerMessageVisitor<T> visitor)

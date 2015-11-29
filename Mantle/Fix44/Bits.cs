@@ -102,6 +102,11 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 38; } }
     }
 
+    public class MinQty : DecimalField
+    {
+        protected override int Tag { get { return 110; } }
+    }
+
     public class ClOrdID : StringField
     {
         protected override int Tag { get { return 11; } }
@@ -341,6 +346,36 @@ namespace iFix.Mantle.Fix44
     public class HuobiAccReqID : StringField
     {
         protected override int Tag { get { return 1622; } }
+    }
+
+    public class HuobiAvailableCny : DecimalField
+    {
+        protected override int Tag { get { return 1623; } }
+    }
+
+    public class HuobiAvailableBtc : DecimalField
+    {
+        protected override int Tag { get { return 1624; } }
+    }
+
+    public class HuobiAvailableLtc : DecimalField
+    {
+        protected override int Tag { get { return 1625; } }
+    }
+
+    public class HuobiFrozenLtc : DecimalField
+    {
+        protected override int Tag { get { return 1626; } }
+    }
+
+    public class HuobiFrozenBtc : DecimalField
+    {
+        protected override int Tag { get { return 1627; } }
+    }
+
+    public class HuobiFrozenCny : DecimalField
+    {
+        protected override int Tag { get { return 1628; } }
     }
 
     public class HuobiCreated : LongField

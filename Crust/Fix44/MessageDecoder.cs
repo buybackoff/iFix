@@ -181,11 +181,13 @@ namespace iFix.Crust.Fix44
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
 
         readonly long _sessionID;
+        readonly Extensions _extensions;
 
         // SessionID is DurableMessage.SessionID.
-        public MessageDecoder(long sessionID)
+        public MessageDecoder(long sessionID, Extensions extensions)
         {
             _sessionID = sessionID;
+            _extensions = extensions;
         }
 
         public IncomingMessage Visit(Mantle.Fix44.Logon msg) { return null; }
@@ -408,43 +410,72 @@ namespace iFix.Crust.Fix44
             return res;
         }
 
-        public IncomingMessage Visit(Mantle.Fix44.OkCoinAccountInfoResponse msg)
+        public IncomingMessage Visit(Mantle.Fix44.AccountInfoResponse msg)
         {
-            if (!msg.Currency.HasValue)
+            switch (_extensions)
             {
-                _log.Warn("AccountInfoResponse is missing Currency field: {0}", msg);
-                return null;
+                case Extensions.OkCoin:
+                    {
+                        if (!msg.Currency.HasValue)
+                        {
+                            _log.Warn("AccountInfoResponse is missing Currency field: {0}", msg);
+                            return null;
+                        }
+                        string[] currency = msg.Currency.Value.Split('/');
+                        if (currency.Length != 3 || currency.Any(s => s.Length == 0))
+                        {
+                            _log.Warn("AccountInfoResponse has invalid Currency field: {0}", msg);
+                            return null;
+                        }
+                        if (!msg.FreeCurrency1.HasValue || !msg.FreeCurrency2.HasValue || !msg.FreeCurrency3.HasValue)
+                        {
+                            _log.Warn("AccountInfoResponse is missing FreeCurrencyX field: {0}", msg);
+                            return null;
+                        }
+                        if (!msg.FrozenCurrency1.HasValue || !msg.FrozenCurrency2.HasValue || !msg.FrozenCurrency3.HasValue)
+                        {
+                            _log.Warn("AccountInfoResponse is missing FrozenCurrencyX field: {0}", msg);
+                            return null;
+                        }
+                        var assets = new Dictionary<string, Asset>();
+                        // Note that the mapping between currency[i] and {Free,Used}Currency[j] isn't straightforward.
+                        assets[currency[0]] = new Asset() { Available = msg.FreeCurrency3.Value, InUse = msg.FrozenCurrency3.Value };
+                        assets[currency[1]] = new Asset() { Available = msg.FreeCurrency1.Value, InUse = msg.FrozenCurrency1.Value };
+                        assets[currency[2]] = new Asset() { Available = msg.FreeCurrency2.Value, InUse = msg.FrozenCurrency2.Value };
+                        if (assets.Count != 3)
+                        {
+                            // This can happen if there are dups in `currency`.
+                            _log.Warn("AccountInfoResponse has invalid Currency field: {0}", msg);
+                            return null;
+                        }
+                        var res = new IncomingMessage();
+                        res.AccountInfo.Value.Assets = assets;
+                        return res;
+                    }
+                case Extensions.Huobi:
+                    {
+                        var res = new IncomingMessage();
+                        res.AccountInfo.Value.Assets = new Dictionary<string, Asset>();
+                        if (msg.HuobiAvailableCny.HasValue && msg.HuobiFrozenCny.HasValue)
+                        {
+                            res.AccountInfo.Value.Assets.Add(
+                                "cny", new Asset() { Available = msg.HuobiAvailableCny.Value, InUse = msg.HuobiFrozenCny.Value });
+                        }
+                        if (msg.HuobiAvailableBtc.HasValue && msg.HuobiFrozenBtc.HasValue)
+                        {
+                            res.AccountInfo.Value.Assets.Add(
+                                "btc", new Asset() { Available = msg.HuobiAvailableBtc.Value, InUse = msg.HuobiFrozenBtc.Value });
+                        }
+                        if (msg.HuobiAvailableLtc.HasValue && msg.HuobiFrozenLtc.HasValue)
+                        {
+                            res.AccountInfo.Value.Assets.Add(
+                                "ltc", new Asset() { Available = msg.HuobiAvailableLtc.Value, InUse = msg.HuobiFrozenLtc.Value });
+                        }
+                        return res;
+                    }
             }
-            string[] currency = msg.Currency.Value.Split('/');
-            if (currency.Length != 3 || currency.Any(s => s.Length == 0))
-            {
-                _log.Warn("AccountInfoResponse has invalid Currency field: {0}", msg);
-                return null;
-            }
-            if (!msg.FreeCurrency1.HasValue || !msg.FreeCurrency2.HasValue || !msg.FreeCurrency3.HasValue)
-            {
-                _log.Warn("AccountInfoResponse is missing FreeCurrencyX field: {0}", msg);
-                return null;
-            }
-            if (!msg.FrozenCurrency1.HasValue || !msg.FrozenCurrency2.HasValue || !msg.FrozenCurrency3.HasValue)
-            {
-                _log.Warn("AccountInfoResponse is missing FrozenCurrencyX field: {0}", msg);
-                return null;
-            }
-            var assets = new Dictionary<string, Asset>();
-            // Note that the mapping between currency[i] and {Free,Used}Currency[j] isn't straightforward.
-            assets[currency[0]] = new Asset() { Available = msg.FreeCurrency3.Value, InUse = msg.FrozenCurrency3.Value };
-            assets[currency[1]] = new Asset() { Available = msg.FreeCurrency1.Value, InUse = msg.FrozenCurrency1.Value };
-            assets[currency[2]] = new Asset() { Available = msg.FreeCurrency2.Value, InUse = msg.FrozenCurrency2.Value };
-            if (assets.Count != 3)
-            {
-                // This can happen if there are dups in `currency`.
-                _log.Warn("AccountInfoResponse has invalid Currency field: {0}", msg);
-                return null;
-            }
-            var res = new IncomingMessage();
-            res.AccountInfo.Value.Assets = assets;
-            return res;
+            _log.Warn("Don't know how to parse AccountInfoResponse. Did you specify the right value for the Client.Extensions field?");
+            return null;
         }
 
         // Three possible outcomes:

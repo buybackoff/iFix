@@ -109,7 +109,6 @@ namespace iFix.Crust.Fix44
             res.Instrument.Symbol.Value = request.Symbol;
             res.Side.Value = request.Side == Side.Buy ? '1' : '2';
             res.TransactTime.Value = res.StandardHeader.SendingTime.Value;
-            res.OrderQtyData.OrderQty.Value = request.Quantity;
             res.OrdType.Value = request.OrderType == OrderType.Market ? '1' : '2';
             if (request.Price.HasValue)
                 res.Price.Value = request.Price.Value;
@@ -117,6 +116,40 @@ namespace iFix.Crust.Fix44
             {
                 res.TimeInForce.Value = '6';  // Good Till Date
                 res.ExpireTime.Value = DateTime.UtcNow + request.TimeToLive.Value;
+            }
+            res.OrderQtyData.OrderQty.Value = request.Quantity;
+            if (_cfg.Extensions == Extensions.Huobi)
+            {
+                res.MinQty.Value = request.Quantity;
+
+                string coinType = null;
+                if (request.Symbol == "btc") coinType = "1";
+                else if (request.Symbol == "ltc") coinType = "2";
+                else throw new ArgumentException(String.Format("Huobi doesn't support Symbol '{0}'", request.Symbol));
+
+                string method = request.Side == Side.Buy ? "buy" : "sell";
+                string price = null;
+
+                if (request.OrderType == OrderType.Market)
+                {
+                    method += "_market";
+                }
+                else
+                {
+                    if (!request.Price.HasValue) throw new ArgumentException("Limit order is missing Price");
+                    price = ToHuobiString(request.Price.Value);
+                }
+
+                res.HuobiSignature = HuobiSignature
+                (
+                    new KeyValuePair<string, string>[]
+                    {
+                        new KeyValuePair<string, string>("method", method),
+                        new KeyValuePair<string, string>("amount", ToHuobiString(request.Quantity)),
+                        new KeyValuePair<string, string>("coin_type", coinType),
+                        new KeyValuePair<string, string>("price", price),
+                    }
+                );
             }
             return res;
         }
@@ -182,7 +215,13 @@ namespace iFix.Crust.Fix44
                         var res = new Mantle.Fix44.HuobiAccountInfoRequest()
                         {
                             StandardHeader = StandardHeader(),
-                            HuobiSignature = HuobiSignature("get_account_info"),
+                            HuobiSignature = HuobiSignature
+                            (
+                                new KeyValuePair<string, string>[]
+                                {
+                                    new KeyValuePair<string, string>("method", "get_account_info")
+                                }
+                            )
                         };
                         res.Account.Value = _cfg.Account;
                         res.HuobiAccReqID.Value = Guid.NewGuid().ToString();
@@ -203,16 +242,45 @@ namespace iFix.Crust.Fix44
             return res;
         }
 
-        Mantle.Fix44.HuobiSignature HuobiSignature(string method)
+        // Elements with null values are ignored.
+        Mantle.Fix44.HuobiSignature HuobiSignature(IEnumerable<KeyValuePair<string, string>> data)
         {
             var res = new Mantle.Fix44.HuobiSignature();
             long now = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
             res.HuobiCreated.Value = now;
             res.HuobiAccessKey.Value = _cfg.Account;
-            res.HuobiSign.Value = Md5Hex(
-                String.Format("access_key={0}&created={1}&method={2}&secret_key={3}",
-                              _cfg.Account, now, method, _cfg.Password));
+            // accessKey, amount, symbol, created, method,  price, secretKey
+            var kv = data.Concat(new KeyValuePair<string, string>[]
+            {
+                new KeyValuePair<string, string>("access_key", _cfg.Account),
+                new KeyValuePair<string, string>("created", now.ToString()),
+                new KeyValuePair<string, string>("secret_key", _cfg.Password),
+            });
+            string s = String.Join("&", kv.Where(p => p.Value != null)
+                                          .OrderBy(p => p.Key)
+                                          .Select(p => String.Format("{0}={1}", p.Key, p.Value)));
+            res.HuobiSign.Value = Md5Hex(s);
             return res;
+        }
+
+        // If Huobi starts rejecting our trade requests with 58=67, it's likely that changing this function
+        // will fix it.
+        static string ToHuobiString(decimal num)
+        {
+            // This is all undocumented. The algorithm for signing REST requests is also undocumented and
+            // is slightly different. Here are a few examples.
+            //
+            // Number | REST | FIX
+            // -------+------+------
+            // 1      | 1    | 1.0
+            // 1.2    | 1.2  | 1.2
+            // 1.23   | 1.23 | 1.23
+            string res = num.ToString();
+            int period = res.IndexOf('.');
+            if (period == -1) return res + ".0";
+            int len = res.Length;
+            while (len > period + 2 && res[len - 1] == '0') --len;
+            return res.Substring(0, len);
         }
 
         static string Md5Hex(string s)

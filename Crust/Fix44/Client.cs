@@ -237,7 +237,8 @@ namespace iFix.Crust.Fix44
             }));
             _messagePump = new MessagePump(
                 _connection,
-                (msg, sessionID) => _scheduler.Schedule(() => OnMessage(msg.Visit(new MessageDecoder(sessionID)))));
+                (msg, sessionID) => _scheduler.Schedule(
+                    () => OnMessage(msg.Visit(new MessageDecoder(sessionID, _cfg.Extensions)))));
             _watchdog = new ConnectionWatchdog(_connection, _scheduler, _messageBuilder);
         }
 
