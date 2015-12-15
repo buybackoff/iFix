@@ -524,7 +524,6 @@ namespace iFix.Crust.Fix44
         {
             _cfg = cfg;
             _connector = connector;
-            Connect().Wait();
         }
 
         public void Dispose()
