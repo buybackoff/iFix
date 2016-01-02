@@ -197,6 +197,11 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 14; } }
     }
 
+    public class AvgPx : DecimalField
+    {
+        protected override int Tag { get { return 6; } }
+    }
+
     public class OrigOrderID : StringField
     {
         protected override int Tag { get { return 9945; } }

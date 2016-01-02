@@ -79,6 +79,16 @@ namespace iFix.Crust
         public Object UserID;
 
         /// <summary>
+        /// The instrument being traded.
+        /// </summary>
+        public string Symbol;
+
+        /// <summary>
+        /// Is this an order to buy or to sell?
+        /// </summary>
+        public Side Side;
+
+        /// <summary>
         /// Under normal circumstances:
         /// 
         ///   * When Status is Created, LeftQuantity is the initial order quantity.
@@ -98,6 +108,12 @@ namespace iFix.Crust
         public decimal LeftQuantity;
 
         /// <summary>
+        /// How many lots have been filled so far? If there were two fills for the order
+        /// for 2 and 3 lots, FillQuantity will be 5.
+        /// </summary>
+        public decimal FillQuantity;
+
+        /// <summary>
         /// Only limit orders have price.
         /// </summary>
         public decimal? Price;
@@ -107,8 +123,11 @@ namespace iFix.Crust
             var res = new StringBuilder();
             res.Append("(");
             if (UserID != null) res.AppendFormat("UserID = ({0}), ", UserID);
-            res.AppendFormat("Status = {0}", Status);
+            res.AppendFormat("Symbol = {0}", Symbol);
+            res.AppendFormat(", Side = {0}", Side);
+            res.AppendFormat(", Status = {0}", Status);
             res.AppendFormat(", LeftQuantity = {0}", LeftQuantity);
+            res.AppendFormat(", FillQuantity = {0}", FillQuantity);
             if (Price.HasValue) res.AppendFormat(", Price = {0}", Price.Value);
             res.Append(")");
             return res.ToString();

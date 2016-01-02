@@ -467,6 +467,7 @@ namespace iFix.Mantle.Fix44
         public LastPx LastPx = new LastPx();
         public LeavesQty LeavesQty = new LeavesQty();
         public CumQty CumQty = new CumQty();
+        public AvgPx AvgPx = new AvgPx();
         public OrigOrderID OrigOrderID = new OrigOrderID();
 
         public override IEnumerator<IFields> GetEnumerator()
@@ -485,6 +486,7 @@ namespace iFix.Mantle.Fix44
             yield return LastPx;
             yield return LeavesQty;
             yield return CumQty;
+            yield return AvgPx;
             yield return OrigOrderID;
         }
 

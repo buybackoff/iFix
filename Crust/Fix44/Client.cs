@@ -114,6 +114,16 @@ namespace iFix.Crust.Fix44
         /// specify which extensions the exchange you are connecting to uses.
         /// </summary>
         public Extensions Extensions = Extensions.None;
+
+        /// <summary>
+        /// Set this option to true if the exchange you are working with has a tendency to
+        /// lose fill notifications (35=8 150=F). For example, okcoin.com is known to
+        /// have this particular bug.
+        /// 
+        /// If set to true, iFix will generate fills based on field CumQty (14) instead of
+        /// LastQty (32). In other words, it will infer fills from order state changes.
+        /// </summary>
+        public bool SimulateFills = false;
     }
 
     // What should be done with the order if an attempt to replace it is rejected?
@@ -289,20 +299,25 @@ namespace iFix.Crust.Fix44
             if (order.Status == OrderStatus.TearingDown)
             {
                 _log.Warn("Order has been in status TearingDown for too long. Finishing it: {0}", order);
-                RaiseOrderEvent(state: order.Update(new OrderUpdate() { Status = OrderStatus.Finished }));
+                Fill dummy;
+                RaiseOrderEvent(state: order.Update(new OrderUpdate() { Status = OrderStatus.Finished }, out dummy));
             }
         }
 
-        OrderState UpdateOrder(string origOrderID, OrderOpID op, OrderUpdate update)
+        OrderState UpdateOrder(string origOrderID, OrderOpID op, OrderUpdate update, out Fill fill)
         {
             // Match by OrderID happens on fills.
             // Match by OrigOrderID happens on moves.
             // Match by OrderOpID happens on order creation and when we are trying to cancel/move an
             // order with unknown ID (Order Cancel Reject <9>).
             IOrder order = _orders.FindByOrderID(update.OrderID) ?? _orders.FindByOrderID(origOrderID) ?? _orders.FindByOpID(op);
-            if (order == null) return null;
+            if (order == null)
+            {
+                fill = null;
+                return null;
+            }
             OrderStatus oldStatus = order.Status;
-            OrderState res = order.Update(update);
+            OrderState res = order.Update(update, out fill);
             // If the order has transitioned to status TearingDown, schedule a check in RequestTimeout.
             // If it's still TearingDown by then, we'll mark it as Finished.
             if (order.Status == OrderStatus.TearingDown && order.Status != oldStatus && _cfg.RequestTimeout > TimeSpan.Zero)
@@ -320,9 +335,12 @@ namespace iFix.Crust.Fix44
                 _connection.Send(_messageBuilder.Heartbeat(msg.TestReqID));
             if (msg.TestRespID != null)
                 _watchdog.OnHeartbeat(msg.TestRespID);
+            Fill fill;
+            OrderState state = UpdateOrder(msg.OrigOrderID, msg.Op.Value, msg.Order.Value, out fill);
+            if (!_cfg.SimulateFills) fill = msg.Fill.Value.MakeFill();
             RaiseOrderEvent(
-                state: UpdateOrder(msg.OrigOrderID, msg.Op.Value, msg.Order.Value),
-                fill: msg.Fill.Value.MakeFill(),
+                state: state,
+                fill: fill,
                 marketData: msg.MarketData.ValueOrNull,
                 accountInfo: msg.AccountInfo.ValueOrNull);
             // Finish a pending op, if there is one. Note that can belong to a different
@@ -337,7 +355,8 @@ namespace iFix.Crust.Fix44
             IOrder order = _orders.FindByOpID(id);
             if (order == null) return;
             _log.Warn("OrderOp {0} timed out for order {1}", id, order);
-            RaiseOrderEvent(state: order.Update(new OrderUpdate() { Status = statusOnTimeout }));
+            Fill dummy;
+            RaiseOrderEvent(state: order.Update(new OrderUpdate() { Status = statusOnTimeout }, out dummy));
             // The previus call to Update may have finished the Op, so we need to check
             // whether it's still pending.
             if (order.IsPending) order.FinishPending();
@@ -381,7 +400,8 @@ namespace iFix.Crust.Fix44
             if (StoreOp(order, msg.ClOrdID.Value, _connection.Send(msg), OrderStatus.Finished)) return true;
             // We were unable to send a new order request to the exchange.
             // Notify the caller that the order is finished.
-            RaiseOrderEvent(state: order.Update(new OrderUpdate() { Status = OrderStatus.Finished }));
+            Fill dummy;
+            RaiseOrderEvent(state: order.Update(new OrderUpdate() { Status = OrderStatus.Finished }, out dummy));
             return false;
         }
 

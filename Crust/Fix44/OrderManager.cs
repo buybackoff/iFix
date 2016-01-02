@@ -21,6 +21,10 @@ namespace iFix.Crust.Fix44
         public decimal? Price;
         // If set, this is the new quantity.
         public decimal? LeftQuantity;
+        // If set, this is the new cumulative fill quantity.
+        public decimal? FillQuantity;
+        // If set, this is the average fill price.
+        public decimal? AverageFillPrice;
 
         public override string ToString()
         {
@@ -48,6 +52,18 @@ namespace iFix.Crust.Fix44
             {
                 if (!empty) res.Append(", ");
                 res.AppendFormat("LeftQuantity = {0}", LeftQuantity);
+                empty = false;
+            }
+            if (FillQuantity != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("FillQuantity = {0}", FillQuantity);
+                empty = false;
+            }
+            if (AverageFillPrice != null)
+            {
+                if (!empty) res.Append(", ");
+                res.AppendFormat("AverageFillPrice = {0}", AverageFillPrice);
                 empty = false;
             }
             res.Append(")");
@@ -93,7 +109,7 @@ namespace iFix.Crust.Fix44
 
         // Returns null if the state didn't change.
         // Requires: update is not null and update.Status != Created.
-        OrderState Update(OrderUpdate update);
+        OrderState Update(OrderUpdate update, out Fill fill);
 
         // Is there a pending operation for the order? In other words, are we expecting an
         // update from the exchange in the near future?
@@ -156,8 +172,11 @@ namespace iFix.Crust.Fix44
             _state = new OrderState()
             {
                 UserID = request.UserID,
+                Symbol = request.Symbol,
+                Side = request.Side,
                 Status = OrderStatus.Created,
                 LeftQuantity = request.Quantity,
+                FillQuantity = 0m,
                 Price = request.Price,
             };
             _orders = orders;
@@ -167,10 +186,11 @@ namespace iFix.Crust.Fix44
 
         public OrderStatus Status { get { return _state.Status; } }
 
-        public OrderState Update(OrderUpdate update)
+        public OrderState Update(OrderUpdate update, out Fill fill)
         {
             Assert.True(Status != OrderStatus.Finished);
             Assert.True(update.Status != OrderStatus.Created, "Invalid update {0} for order {1}", update, this);
+            fill = null;
             bool changed = false;
             // Do we have a new OrderID assigned by the exchange?
             if (update.OrderID != null && update.OrderID != _orderID)
@@ -216,6 +236,22 @@ namespace iFix.Crust.Fix44
                 _state.LeftQuantity = update.LeftQuantity.Value;
                 changed = true;
             }
+            if (update.FillQuantity.HasValue && update.FillQuantity.Value > _state.FillQuantity)
+            {
+                // This is a so called "similated" fill. It's used only if ClientConfig.SimulateFills
+                // is true.
+                fill = new Fill()
+                {
+                    Side = _state.Side,
+                    Symbol = _state.Symbol,
+                    Quantity = update.FillQuantity.Value - _state.FillQuantity,
+                    Price = update.AverageFillPrice.HasValue ? update.AverageFillPrice.Value :
+                            _state.Price.HasValue ? _state.Price.Value : 0m
+                };
+                _state.FillQuantity = update.FillQuantity.Value;
+                changed = true;
+            }
+            // TODO: update FillQuantity.
             return changed ? (OrderState)_state.Clone() : null;
         }
 

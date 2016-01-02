@@ -283,6 +283,10 @@ namespace iFix.Crust.Fix44
             // We'd rather leave the last value.
             if (msg.LeavesQty.HasValue && msg.OrdStatus.Value != '6')
                 res.Order.Value.LeftQuantity = msg.LeavesQty.Value;
+            if (msg.CumQty.HasValue)
+                res.Order.Value.FillQuantity = msg.CumQty.Value;
+            if (msg.AvgPx.HasValue)
+                res.Order.Value.AverageFillPrice = msg.AvgPx.Value;
             if (msg.Symbol.HasValue)
                 res.Fill.Value.Symbol = msg.Symbol.Value;
             if (msg.Side.HasValue)
