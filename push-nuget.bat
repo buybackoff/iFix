@@ -4,7 +4,7 @@ REM Run this script from the root of iFix (the current directory should
 REM contain iFix.sln). It will build the whole solution and push new
 REM versions of iFix.Common, iFix.Core, iFix.Mantle and iFix.Crust to nuget.org.
 
-call "%VS120COMNTOOLS%vsvars32.bat" || goto :error
+call "%VS140COMNTOOLS%vsvars32.bat" || goto :error
 
 devenv /rebuild Release iFix.sln || goto :error
 
