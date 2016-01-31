@@ -285,7 +285,6 @@ namespace iFix.Crust.Fix44
 
         static string Md5Hex(string s)
         {
-            Console.WriteLine(s);
             byte[] hash = MD5.Create().ComputeHash(Encoding.ASCII.GetBytes(s));
             StringBuilder res = new StringBuilder(2 * hash.Length);
             foreach (byte x in hash)
