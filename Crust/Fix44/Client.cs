@@ -339,6 +339,7 @@ namespace iFix.Crust.Fix44
             OrderState state = UpdateOrder(msg.OrigOrderID, msg.Op.Value, msg.Order.Value, out fill);
             if (!_cfg.SimulateFills) fill = msg.Fill.Value.MakeFill();
             RaiseOrderEvent(
+                sendingTime: msg.SendingTime,
                 state: state,
                 fill: fill,
                 marketData: msg.MarketData.ValueOrNull,
@@ -374,7 +375,7 @@ namespace iFix.Crust.Fix44
             return true;
         }
 
-        void RaiseOrderEvent(OrderState state = null, Fill fill = null, MarketData marketData = null,
+        void RaiseOrderEvent(DateTime? sendingTime = default(DateTime?), OrderState state = null, Fill fill = null, MarketData marketData = null,
                              AccountInfo accountInfo = null)
         {
             if (_cfg.FakeTradeCount > 0 && marketData != null && marketData.Trades != null &&
@@ -385,7 +386,7 @@ namespace iFix.Crust.Fix44
             }
             if (state != null || fill != null || marketData != null || accountInfo != null)
             {
-                var e = new OrderEvent() { State = state, Fill = fill, MarketData = marketData, AccountInfo = accountInfo };
+                var e = new OrderEvent() { SendingTime = sendingTime, State = state, Fill = fill, MarketData = marketData, AccountInfo = accountInfo };
                 _log.Info("Publishing OrderEvent: {0}", e);
                 Action<OrderEvent> action = Volatile.Read(ref OnOrderEvent);
                 if (action != null) action(e);

@@ -90,6 +90,9 @@ namespace iFix.Crust.Fix44
     // All fields are optional (may be null). They are extracted independently from incoming messages.
     class IncomingMessage
     {
+        // Server timestamp (if available).
+        public DateTime? SendingTime;
+
         // If set, we need to reply with a heartbeat.
         public string TestReqID;
 
@@ -204,6 +207,7 @@ namespace iFix.Crust.Fix44
         public IncomingMessage Visit(Mantle.Fix44.Heartbeat msg) {
             if (!msg.TestReqID.HasValue) return null;
             var res = new IncomingMessage();
+            res.SendingTime = msg.StandardHeader.SendingTime.Value;
             res.TestRespID = msg.TestReqID.Value;
             return res;
         }
@@ -211,6 +215,7 @@ namespace iFix.Crust.Fix44
         public IncomingMessage Visit(Mantle.Fix44.TestRequest msg)
         {
             var res = new IncomingMessage();
+            res.SendingTime = msg.StandardHeader.SendingTime.Value;
             if (msg.TestReqID.HasValue)
                 res.TestReqID = msg.TestReqID.Value;
             else
@@ -221,6 +226,7 @@ namespace iFix.Crust.Fix44
         public IncomingMessage Visit(Mantle.Fix44.Reject msg)
         {
             var res = new IncomingMessage();
+            res.SendingTime = msg.StandardHeader.SendingTime.Value;
             if (msg.RefSeqNum.HasValue)
                 res.Op.Value.SeqNum = new DurableSeqNum { SessionID = _sessionID, SeqNum = msg.RefSeqNum.Value };
             else
@@ -231,6 +237,7 @@ namespace iFix.Crust.Fix44
         public IncomingMessage Visit(Mantle.Fix44.OrderCancelReject msg)
         {
             var res = new IncomingMessage();
+            res.SendingTime = msg.StandardHeader.SendingTime.Value;
             if (msg.ClOrdID.HasValue)
                 res.Op.Value.ClOrdID = msg.ClOrdID.Value;
             else
@@ -247,6 +254,7 @@ namespace iFix.Crust.Fix44
         public IncomingMessage Visit(Mantle.Fix44.ExecutionReport msg)
         {
             var res = new IncomingMessage();
+            res.SendingTime = msg.StandardHeader.SendingTime.Value;
             if (msg.ClOrdID.HasValue)
                 res.Op.Value.ClOrdID = msg.ClOrdID.Value;
             else
@@ -305,6 +313,7 @@ namespace iFix.Crust.Fix44
         public IncomingMessage Visit(Mantle.Fix44.MarketDataResponse msg)
         {
             var res = new IncomingMessage();
+            res.SendingTime = msg.StandardHeader.SendingTime.Value;
             if (msg.OrigTime.HasValue)
             {
                 res.MarketData.Value.ServerTime = msg.OrigTime.Value;
@@ -357,6 +366,7 @@ namespace iFix.Crust.Fix44
         public IncomingMessage Visit(Mantle.Fix44.MarketDataIncrementalRefresh msg)
         {
             var res = new IncomingMessage();
+            res.SendingTime = msg.StandardHeader.SendingTime.Value;
             if (!msg.StandardHeader.SendingTime.HasValue)
             {
                 _log.Warn("MarketDataResponse is missing SendingTime field: {0}", msg);
@@ -453,12 +463,14 @@ namespace iFix.Crust.Fix44
                             return null;
                         }
                         var res = new IncomingMessage();
+                        res.SendingTime = msg.StandardHeader.SendingTime.Value;
                         res.AccountInfo.Value.Assets = assets;
                         return res;
                     }
                 case Extensions.Huobi:
                     {
                         var res = new IncomingMessage();
+                        res.SendingTime = msg.StandardHeader.SendingTime.Value;
                         res.AccountInfo.Value.Assets = new Dictionary<string, Asset>();
                         if (msg.HuobiAvailableCny.HasValue && msg.HuobiFrozenCny.HasValue)
                         {

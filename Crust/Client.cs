@@ -460,6 +460,10 @@ namespace iFix.Crust
     public class OrderEvent : ICloneable
     {
         /// <summary>
+        /// Server time, when this message was sent by the server. (if applicable)
+        /// </summary>
+        public DateTime? SendingTime;
+        /// <summary>
         /// What is the state of the order after the change? May be null if we don't know
         /// which order is affected by the event. For example, when the exchange notifies us
         /// about a fill we might not find the associated order.
@@ -514,6 +518,7 @@ namespace iFix.Crust
         {
             return new OrderEvent()
             {
+                SendingTime = this.SendingTime,
                 State = (OrderState)State.Clone(),
                 Fill = (Fill)Fill.Clone(),
                 MarketData = (MarketData)MarketData.Clone(),
