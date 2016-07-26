@@ -263,13 +263,12 @@ namespace iFix.Crust.Fix44
             return res;
         }
 
-        public Task<bool> RequestMarketData()
+        public Task<bool> RequestMarketData(string symbol)
         {
             var res = new Task<bool>(() =>
             {
-                foreach (string symbol in _cfg.MarketDataSymbols)
-                    if (_connection.Send(_messageBuilder.MarketDataRequest(symbol, MessageBuilder.MarketDataType.Order)) == null)
-                        return false;
+                if (_connection.Send(_messageBuilder.MarketDataRequest(symbol, MessageBuilder.MarketDataType.Order)) == null)
+                    return false;
                 return true;
             });
             _scheduler.Schedule(() => res.RunSynchronously());
@@ -587,12 +586,12 @@ namespace iFix.Crust.Fix44
             });
         }
 
-        public Task<bool> RequestMarketData()
+        public Task<bool> RequestMarketData(string symbol)
         {
             lock (_monitor)
             {
                 if (_client == null || _transition != null) return Task.FromResult(false);
-                return _client.RequestMarketData();
+                return _client.RequestMarketData(symbol);
             }
         }
 

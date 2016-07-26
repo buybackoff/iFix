@@ -56,7 +56,12 @@ namespace iFix.Crust.Fix44
             // It's important for huobi that MDReqID has symbol as its prefix. Otherwise they'll
             // silently ignore our request. This is undocumented.
             res.MDReqID.Value = symbol + Guid.NewGuid().ToString();
-            res.SubscriptionRequestType.Value = '1';
+            // '0' - snapshot only
+            // '1' - snapshot followed by incremental refresh
+            // For trades we request snapshot + incremental refresh
+            // For orderbook we request snapshot only, as OkCoin sends incremental refresh for the first 20 rows only.
+            // (i.e. snapshots need to be requested periodically).
+            res.SubscriptionRequestType.Value = type == MarketDataType.Trade ? '1' : '0';
             res.MarketDepth.Value = 0;
             res.MDUpdateType.Value = 1;
             switch (type)

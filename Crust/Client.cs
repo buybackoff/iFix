@@ -662,7 +662,7 @@ namespace iFix.Crust
         /// waiting for the reply). If the request can't be send to the exchange (for example, if
         /// there is no connection), the task completes with `false`.
         /// </summary>
-        Task<bool> RequestMarketData();
+        Task<bool> RequestMarketData(string symbol);
 
         /// <summary>
         /// Requests account info from the exchange. The info will be delivered asynchronously to
