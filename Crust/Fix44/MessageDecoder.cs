@@ -257,8 +257,6 @@ namespace iFix.Crust.Fix44
             res.SendingTime = msg.StandardHeader.SendingTime.Value;
             if (msg.ClOrdID.HasValue)
                 res.Op.Value.ClOrdID = msg.ClOrdID.Value;
-            else
-                _log.Warn("ExecutionReport is missing ClOrdID");
             if (msg.OrigOrderID.HasValue)
                 res.OrigOrderID = msg.OrigOrderID.Value;
             if (msg.OrderID.HasValue)
