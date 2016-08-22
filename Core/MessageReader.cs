@@ -78,7 +78,8 @@ namespace iFix.Core
             }
             var res = new ArraySegment<byte>(_buf, _startPos, messageEnd - _startPos);
             _startPos = messageEnd;
-            _log.Info("IN: {0}", res.AsAscii());
+            if (_log.IsDebugEnabled) _log.Debug("IN: {0}", res.AsAscii());
+            else _log.Info("IN: {0}", Truncate(res.AsAscii(), 1024));
             return res;
         }
 
@@ -97,6 +98,23 @@ namespace iFix.Core
                 _buf[i - _startPos] = _buf[i];
             _endPos -= _startPos;
             _startPos = 0;
+        }
+
+        // Truncates string for logging. Strings shorter than maxLength are returned as is.
+        // Longer strings get truncated at maxLength and then a short suffix is appended.
+        //
+        // The maximum length of the returned string is maxLength + C where C is a small
+        // positive number.
+        //
+        //   Truncate("abc", 3") => "abc"
+        //   Truncate("Lorem ipsum dolor sit amet", 3") => "Lor ... (23 more chars)"
+        //   Truncate("Lorem ipsum", 3") => "Lorem Ipsum" (the truncated version would be longer)
+        static string Truncate(string s, int maxLength)
+        {
+            if (s.Length <= maxLength) return s;
+            maxLength = Math.Max(maxLength, 0);
+            string res = String.Format("{0} ... ({1} more chars)", s.Substring(0, maxLength), s.Length - maxLength);
+            return res.Length < s.Length ? res : s;
         }
     }
 }

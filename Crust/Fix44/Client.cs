@@ -329,7 +329,7 @@ namespace iFix.Crust.Fix44
         void OnMessage(IncomingMessage msg)
         {
             if (msg == null) return;
-            _log.Info("Decoded incoming message: {0}", msg);
+            _log.Debug("Decoded incoming message: {0}", msg);
             if (msg.TestReqID != null)
                 _connection.Send(_messageBuilder.Heartbeat(msg.TestReqID));
             if (msg.TestRespID != null)
@@ -386,7 +386,7 @@ namespace iFix.Crust.Fix44
             if (state != null || fill != null || marketData != null || accountInfo != null)
             {
                 var e = new OrderEvent() { SendingTime = sendingTime, State = state, Fill = fill, MarketData = marketData, AccountInfo = accountInfo };
-                _log.Info("Publishing OrderEvent: {0}", e);
+                _log.Debug("Publishing OrderEvent: {0}", e);
                 Action<OrderEvent> action = Volatile.Read(ref OnOrderEvent);
                 if (action != null) action(e);
             }
