@@ -36,12 +36,12 @@ namespace iFix.Mantle
 
         // Only one thread at a time is allowed to call Receive().
         // If it throws, the receiver is no longer usable and should be destroyed.
-        public async Task<IMessage> Receive(CancellationToken cancellationToken)
+        public async Task<IMessage> Receive()
         {
             // Loop until we get a message of known type.
             while (true)
             {
-                var raw = new RawMessage(await _reader.ReadMessage(_in, cancellationToken));
+                var raw = new RawMessage(await _reader.ReadMessage(_in));
                 IEnumerator<Field> fields = raw.GetEnumerator();
                 IMessageFactory factory = GetFactory(fields);
                 IMessage msg = factory.CreateMessage(fields);

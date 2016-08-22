@@ -56,7 +56,7 @@ namespace iFix.Core
         //
         // Throws EmptyStreamException if nothing can be read from the
         // underlying stream.
-        public async Task<ArraySegment<byte>> ReadMessage(Stream strm, CancellationToken cancellationToken)
+        public async Task<ArraySegment<byte>> ReadMessage(Stream strm)
         {
             Assert.True(strm != null);
             var trailerMatcher = new MessageTrailerMatcher();
@@ -66,8 +66,7 @@ namespace iFix.Core
             {
                 EnsureBufferSpace();
                 Assert.True(_endPos < _buf.Length, "_endPos = {0}, _buf.Length = {1}", _endPos, _buf.Length);
-                // TODO: NetworkStream doesn't really support cancellation. Figure out how to cancel.
-                int read = await strm.ReadAsync(_buf, _endPos, _buf.Length - _endPos, cancellationToken);
+                int read = await strm.ReadAsync(_buf, _endPos, _buf.Length - _endPos);
                 if (read <= 0)
                 {
                     var partial = new ArraySegment<byte>(_buf, _startPos, _endPos - _startPos);

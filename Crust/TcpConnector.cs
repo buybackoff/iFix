@@ -28,6 +28,7 @@ namespace iFix.Crust
 
     class TcpConnection : IConnection
     {
+        private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(60);
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
 
         readonly TcpClient _client;
@@ -110,7 +111,27 @@ namespace iFix.Crust
 
         public async Task<Mantle.Fix44.IMessage> Receive(CancellationToken cancellationToken)
         {
-            return (Mantle.Fix44.IServerMessage)await _receiver.Receive(cancellationToken);
+            Action onTimeout = () =>
+            {
+                _log.Warn("Haven't received anything from the exchange for {0}. " +
+                          "Going to close the socket and reconnect.", ReadTimeout);
+                try { _client.Close(); }
+                catch { }
+            };
+            Action onCancel = () =>
+            {
+                _log.Warn("Forcefully closing the connection");
+                try { _client.Close(); }
+                catch { }
+            };
+            // Trivia: TcpClient doesn't respect ReceiveTimeout. Its stream doesn't respect ReadTimeout.
+            // ReadAsync() doesn't respect cancellation token.
+            using (var timeout = new CancellationTokenSource(ReadTimeout))
+            using (timeout.Token.Register(onTimeout))
+            using (cancellationToken.Register(onCancel))
+            {
+                return (Mantle.Fix44.IServerMessage)await _receiver.Receive();
+            }
         }
 
         public void Dispose()
