@@ -523,6 +523,7 @@ namespace iFix.Crust.Fix44
 
     public class Client : IClient
     {
+        static readonly Logger _log = LogManager.GetCurrentClassLogger();
         readonly ClientConfig _cfg;
         readonly IConnector _connector;
 
@@ -564,6 +565,7 @@ namespace iFix.Crust.Fix44
 
         public Task Connect()
         {
+            _log.Info("Connect requested by the user");
             return Transition(() =>
             {
                 if (_client != null) return;
@@ -578,6 +580,7 @@ namespace iFix.Crust.Fix44
 
         public Task Disconnect()
         {
+            _log.Info("Disconnect requested by the user");
             return Transition(() =>
             {
                 if (_client == null) return;
