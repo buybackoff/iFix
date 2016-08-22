@@ -26,6 +26,7 @@ using System.Threading.Tasks;
 
 namespace iFix.Driver
 {
+    /*
     // Huobi test.
     class Program
     {
@@ -68,9 +69,8 @@ namespace iFix.Driver
                 _log.Fatal(e, "Unexpected exception. Terminating.");
             }
         }
-    }
+    }*/
 
-    /*
     public class CyclicArray<T> : IEnumerable<T>
     {
         private readonly T[] _array;
@@ -370,8 +370,8 @@ namespace iFix.Driver
             {
                 // Copy-paste from https://www.okcoin.com/user/api.do.
                 // Anyone who knows your keys can send orders on your behalf. Don't leak them!
-                string apiKey = "FIXME";
-                string secretKey = "FIXME";
+                string apiKey = "e6b13dae-d001-4f73-a42b-7f6df954c817";
+                string secretKey = "67B61C131D3A7A24CFEDE114F4F0FCCD";
                 var client = new Crust.Fix44.Client(
                     new Crust.Fix44.ClientConfig()
                     {
@@ -384,8 +384,9 @@ namespace iFix.Driver
                         ReplaceEnabled = false,
                         // MarketDataSymbols = new List<string> { "BTC/USD" }
                     },
-                    new TcpConnector("api.okcoin.com", 9880, ConnectionType.Secure));
+                    new TcpConnector("api.okcoin.cn", 9880, new SslOptions()));
                 client.OnOrderEvent += e => _log.Info("Generated event: {0}", e);
+                client.Connect().Wait();
                 var req = new NewOrderRequest()
                 {
                     Symbol = "BTC/USD",
@@ -396,39 +397,10 @@ namespace iFix.Driver
                     UserID = "MyOrder",
                     TimeToLive = TimeSpan.FromSeconds(20),
                 };
-                Thread.Sleep(2000);
+                while (true) Thread.Sleep(2000);
                 IOrderCtrl order = client.CreateOrder(req).Result;
                 if (order == null) throw new Exception("Null order");
                 Thread.Sleep(2000);
-                // if (order.Replace(0.01m, 391.00m).Result) throw new Exception("order.Replace() succeeded");
-                // if (!order.ReplaceOrCancel(0.01m, 391.00m).Result) throw new Exception("order.ReplaceOrCancel() failed");
-                // Thread.Sleep(2000);
-                // DateTime start = DateTime.UtcNow;
-                // int txn = 0;
-                // var limiter = new FloodController(1, TimeSpan.FromSeconds(5));
-                // var tasks = new CyclicArray<Task>(1);
-                // DateTime lastReport = start;
-                //while (DateTime.UtcNow - start < TimeSpan.FromSeconds(3900))
-                //{
-                //    if (tasks.IsFull)
-                //    {
-                //        tasks.RemoveFirst().Wait();
-                //    }
-                //    for (int i = 0; i != 2; ++i)
-                //    {
-                //        while (!limiter.CanSend(DateTime.UtcNow)) { Thread.Yield(); }
-                //        limiter.IncrementTransactionsCount(DateTime.UtcNow, 1);
-                //        ++txn;
-                //    }
-                //    if (DateTime.UtcNow - lastReport > TimeSpan.FromSeconds(1))
-                //    {
-                //        lastReport = DateTime.UtcNow;
-                //        _log.Info("****************** RATE: {0} *****************", txn / (DateTime.UtcNow - start).TotalSeconds);
-                //    }
-                //    tasks.AddLast(FlashOrder(client));
-                //}
-                //foreach (Task t in tasks) t.Wait();
-                //_log.Info("****************** DONE: {0} *****************", txn / (DateTime.UtcNow - start).TotalSeconds);
                 client.Dispose();
             }
             catch (Exception e)
@@ -436,7 +408,7 @@ namespace iFix.Driver
                 _log.Fatal(e, "Unexpected exception. Terminating.");
             }
         }
-    }*/
+    }
 
     // MOEX test.
     /*
