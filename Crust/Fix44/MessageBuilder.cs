@@ -241,8 +241,8 @@ namespace iFix.Crust.Fix44
         Mantle.Fix44.StandardHeader StandardHeader()
         {
             var res = new Mantle.Fix44.StandardHeader();
-            res.SenderCompID.Value = _cfg.SenderCompID;
-            res.TargetCompID.Value = _cfg.TargetCompID;
+            if (_cfg.SenderCompID != null) res.SenderCompID.Value = _cfg.SenderCompID;
+            if (_cfg.TargetCompID != null) res.TargetCompID.Value = _cfg.TargetCompID;
             res.SendingTime.Value = DateTime.UtcNow;
             return res;
         }
