@@ -26,6 +26,33 @@ using System.Threading.Tasks;
 
 namespace iFix.Driver
 {
+    // NASDAQ test.
+    class Program
+    {
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
+        public static void Main(string[] args)
+        {
+            try
+            {
+                var client = new Crust.Fix44.Client(
+                    new Crust.Fix44.ClientConfig()
+                    {
+                        Username = "FIXME",
+                        Password = "FIXME",
+                    },
+                    new TcpConnector("154.61.34.2", 18423));
+                client.Connect();
+                while (true) Thread.Sleep(1000);
+                client.Dispose();
+            }
+            catch (Exception e)
+            {
+                _log.Fatal(e, "Unexpected exception. Terminating.");
+            }
+        }
+    }
+
     /*
     // Huobi test.
     class Program
@@ -72,6 +99,7 @@ namespace iFix.Driver
     }*/
 
     // OKcoin test.
+    /*
     class Program
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
@@ -121,6 +149,7 @@ namespace iFix.Driver
             }
         }
     }
+    */
 
     // MOEX test.
     /*
