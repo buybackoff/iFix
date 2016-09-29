@@ -38,8 +38,11 @@ namespace iFix.Driver
                 var client = new Crust.Fix44.Client(
                     new Crust.Fix44.ClientConfig()
                     {
-                        Username = "FIXME",
-                        Password = "FIXME",
+                        Username = "$username",
+                        Password = "$password",
+                        SenderCompID = "$username",
+                        TargetCompID = "ITINMD",
+                        HeartBtInt = 1,
                     },
                     new TcpConnector("154.61.34.2", 18423));
                 client.Connect();
