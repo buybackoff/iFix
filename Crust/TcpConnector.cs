@@ -24,6 +24,8 @@ namespace iFix.Crust
         // Allow certificate chains that can't be built to a trusted root authority.
         // Enable it if you are OK with shady self issued certificates.
         public bool AllowPartialChain = false;
+        // Certificate missing? Invalid? Name mismatch? Whatever, man. YOLO!
+        public bool AllowAllErrors = false;
     }
 
     class TcpConnection : IConnection
@@ -57,7 +59,7 @@ namespace iFix.Crust
                         if (errors != SslPolicyErrors.RemoteCertificateChainErrors)
                         {
                             _log.Error("SSL handshake error: {0}", errors);
-                            return false;
+                            return ssl.AllowAllErrors;
                         }
                         foreach (X509ChainStatus ch in chain.ChainStatus)
                         {
@@ -72,16 +74,18 @@ namespace iFix.Crust
                                 continue;
                             }
                             _log.Error("SSL handshake error: {0} {1}", ch.Status, ch.StatusInformation);
-                            return false;
+                            return ssl.AllowAllErrors;
                         }
                         return true;
                     };
-                    var sslStrm = new SslStream(_client.GetStream(), false, cb);
+                    var sslStrm = new SslStream(_client.GetStream(), leaveInnerStreamOpen: false,
+                                                userCertificateValidationCallback: cb);
                     var certs = new X509CertificateCollection();
                     if (ssl.CertificateFilename != null)
                         certs.Add(new X509Certificate(ssl.CertificateFilename, ssl.CertificateFilePassword));
                     sslStrm.AuthenticateAsClient(ssl.CertificateName ?? host, certs,
-                                                 System.Security.Authentication.SslProtocols.Default, checkCertificateRevocation: false);
+                                                 System.Security.Authentication.SslProtocols.Default,
+                                                 checkCertificateRevocation: false);
                     _strm = sslStrm;
                 }
                 catch
