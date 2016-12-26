@@ -41,7 +41,7 @@ namespace iFix.Crust.Fix44
             res.EncryptMethod.Value = 0;
             res.HeartBtInt.Value = _cfg.HeartBtInt;
             if (_cfg.Username != null) res.Username.Value = _cfg.Username;
-            res.Password.Value = _cfg.Password;
+            if (_cfg.Password != null) res.Password.Value = _cfg.Password;
             res.ResetSeqNumFlag.Value = true;
             return res;
         }
