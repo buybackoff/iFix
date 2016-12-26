@@ -26,6 +26,41 @@ using System.Threading.Tasks;
 
 namespace iFix.Driver
 {
+    // BTCC test.
+    class Program
+    {
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
+
+        public static void Main(string[] args)
+        {
+            try
+            {
+                // Anyone who knows your keys can send orders on your behalf. Don't leak them!
+                string apiKey = "FIXME";
+                var ssl = new SslOptions() { AllowPartialChain = true, AllowAllErrors = true };
+                var client = new Crust.Fix44.Client(
+                    new Crust.Fix44.ClientConfig()
+                    {
+                        SenderCompID = apiKey,
+                        TargetCompID = "BTCC-FIX-SERVER",
+                        HeartBtInt = 30,
+                        ReplaceEnabled = false,
+                        MarketDataSymbols = new List<string> { "BTCCNY" }
+                    },
+                    new TcpConnector("fix.btcc.com", 9880, ssl));
+                client.OnOrderEvent += e => _log.Info("Generated event: {0}", e);
+                client.Connect().Wait();
+                while (true) Thread.Sleep(2000);
+                client.Dispose();
+            }
+            catch (Exception e)
+            {
+                _log.Fatal(e, "Unexpected exception. Terminating.");
+            }
+        }
+    }
+
+    /*
     // NASDAQ test.
     class Program
     {
@@ -54,7 +89,7 @@ namespace iFix.Driver
                 _log.Fatal(e, "Unexpected exception. Terminating.");
             }
         }
-    }
+    }*/
 
     /*
     // Huobi test.
