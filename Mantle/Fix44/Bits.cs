@@ -398,6 +398,16 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 959; } }
     }
 
+    public class MassStatusReqID : StringField
+    {
+        protected override int Tag { get { return 584; } }
+    }
+
+    public class MassStatusReqType : IntField
+    {
+        protected override int Tag { get { return 585; } }
+    }
+
     // Component blocks: http://www.onixs.biz/fix-dictionary/4.4/#ComponentBlocks.
 
     // BeginString, BodyLength and MsgType are intentionally missing.

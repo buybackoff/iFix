@@ -67,6 +67,7 @@ namespace iFix.Mantle.Fix44
         T Visit(MarketDataRequest msg);
         T Visit(OkCoinAccountInfoRequest msg);
         T Visit(HuobiAccountInfoRequest msg);
+        T Visit(OrderMassStatusRequest msg);
     }
 
     // FIX client can use this interface to handle all types of messages
@@ -136,6 +137,7 @@ namespace iFix.Mantle.Fix44
             // OkCoinAccountInfoRequest.MsgType. This doesn't matter though because NewMessage() is called
             // only for the incoming server messages.
             if (msgType.Value == HuobiAccountInfoRequest.MsgType.Value) return new HuobiAccountInfoRequest();
+            if (msgType.Value == OrderMassStatusRequest.MsgType.Value) return new OrderMassStatusRequest();
             return null;
         }
 
@@ -388,6 +390,7 @@ namespace iFix.Mantle.Fix44
         public static readonly MsgType MsgType = new MsgType { Value = "F" };
         public OrigClOrdID OrigClOrdID = new OrigClOrdID();
         public ClOrdID ClOrdID = new ClOrdID();
+        public HuobiSignature HuobiSignature = new HuobiSignature();
         public OrderID OrderID = new OrderID();
         public Instrument Instrument = new Instrument();
         public Side Side = new Side();
@@ -399,6 +402,7 @@ namespace iFix.Mantle.Fix44
             yield return StandardHeader;
             yield return OrigClOrdID;
             yield return ClOrdID;
+            yield return HuobiSignature;
             yield return OrderID;
             yield return Instrument;
             yield return Side;
@@ -745,6 +749,33 @@ namespace iFix.Mantle.Fix44
             yield return Account;
             yield return HuobiAccReqID;
             yield return HuobiSignature;
+        }
+
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Order Mass Status Request <AF>: http://www.onixs.biz/fix-dictionary/4.4/msgType_AF_6570.html
+    public class OrderMassStatusRequest : Message, IClientMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "AF" };
+        public Account Account = new Account();
+        public HuobiSignature HuobiSignature = new HuobiSignature();
+        public MassStatusReqID MassStatusReqID = new MassStatusReqID();
+        public MassStatusReqType MassStatusReqType = new MassStatusReqType();
+        public Instrument Instrument = new Instrument();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return Account;
+            yield return HuobiSignature;
+            yield return MassStatusReqID;
+            yield return MassStatusReqType;
+            yield return Instrument;
         }
 
         public T Visit<T>(IClientMessageVisitor<T> visitor)

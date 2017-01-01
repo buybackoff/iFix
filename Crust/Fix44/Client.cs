@@ -285,6 +285,13 @@ namespace iFix.Crust.Fix44
             return res;
         }
 
+        public Task<bool> RequestMassOrderStatus(string symbol)
+        {
+            var res = new Task<bool>(() => _connection.Send(_messageBuilder.OrderMassStatusRequest(symbol)) != null);
+            _scheduler.Schedule(() => res.RunSynchronously());
+            return res;
+        }
+
         public void Dispose()
         {
             _log.Info("Disposing of iFix.Crust.ConnectedClient");
@@ -607,6 +614,15 @@ namespace iFix.Crust.Fix44
             {
                 if (_client == null || _transition != null) return Task.FromResult(false);
                 return _client.RequestAccountInfo();
+            }
+        }
+
+        public Task<bool> RequestMassOrderStatus(string symbol)
+        {
+            lock (_monitor)
+            {
+                if (_client == null || _transition != null) return Task.FromResult(false);
+                return _client.RequestMassOrderStatus(symbol);
             }
         }
 

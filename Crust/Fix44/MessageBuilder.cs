@@ -245,6 +245,32 @@ namespace iFix.Crust.Fix44
                 "make sure you are passing correct value of iFix.Crust.Fix44.Config.Extensions");
         }
 
+        public Mantle.Fix44.IClientMessage OrderMassStatusRequest(string symbol)
+        {
+            var res = new Mantle.Fix44.OrderMassStatusRequest() { StandardHeader = StandardHeader() };
+            res.Account.Value = _cfg.Account;
+            res.MassStatusReqID.Value = Guid.NewGuid().ToString();
+            res.MassStatusReqType.Value = 7;  // status for all orders
+            if (symbol != null)
+            {
+                res.Instrument.Symbol.Value = symbol;
+            }
+            if (_cfg.Extensions == Extensions.Huobi)
+            {
+                if (symbol == null)
+                    throw new Exception("Symbol is required when requesting order status on Huobi");
+                res.HuobiSignature = HuobiSignature
+                (
+                    new KeyValuePair<string, string>[]
+                    {
+                        new KeyValuePair<string, string>("method", "get_orders"),
+                        new KeyValuePair<string, string>("coin_type", HuobiCoinType(symbol)),
+                    }
+                );
+            }
+            return res;
+        }
+
         Mantle.Fix44.StandardHeader StandardHeader()
         {
             var res = new Mantle.Fix44.StandardHeader();
