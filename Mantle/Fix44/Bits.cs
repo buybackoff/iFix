@@ -297,8 +297,8 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 279; } }
     }
 
-    // OKCoin extension: Client-assigned unique ID of this request.
-    public class OkCoinAccReqID : StringField
+    // OKCoin, Huobi and BTCC extension: Client-assigned unique ID of this request.
+    public class AccReqID : StringField
     {
         protected override int Tag { get { return 8000; } }
     }

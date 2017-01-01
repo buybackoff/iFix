@@ -58,10 +58,13 @@ namespace iFix.Crust.Fix44
             res.MDReqID.Value = symbol + Guid.NewGuid().ToString();
             // '0' - snapshot only
             // '1' - snapshot followed by incremental refresh
-            // For trades we request snapshot + incremental refresh
-            // For orderbook we request snapshot only, as OkCoin sends incremental refresh for the first 20 rows only.
-            // (i.e. snapshots need to be requested periodically).
-            res.SubscriptionRequestType.Value = type == MarketDataType.Trade ? '1' : '0';
+            res.SubscriptionRequestType.Value = '1';
+            if (_cfg.Extensions == Extensions.OkCoin && type == MarketDataType.Order)
+            {
+                // OkCoin sends incremental refresh for the first 20 rows only, which isn't enough for us.
+                // We have to periodically request the full snapshot instead.
+                res.SubscriptionRequestType.Value = '0';
+            }
             res.MarketDepth.Value = 0;
             res.MDUpdateType.Value = 1;
             switch (type)
@@ -126,10 +129,9 @@ namespace iFix.Crust.Fix44
             if (_cfg.Extensions == Extensions.Huobi)
             {
                 res.MinQty.Value = request.Quantity;
-
                 string coinType = null;
-                if (request.Symbol == "btc") coinType = "1";
-                else if (request.Symbol == "ltc") coinType = "2";
+                if (request.Symbol.StartsWith("btc")) coinType = "1";
+                else if (request.Symbol.StartsWith("ltc")) coinType = "2";
                 else throw new ArgumentException(String.Format("Huobi doesn't support Symbol '{0}'", request.Symbol));
 
                 string method = request.Side == Side.Buy ? "buy" : "sell";
@@ -212,7 +214,7 @@ namespace iFix.Crust.Fix44
                     {
                         var res = new Mantle.Fix44.OkCoinAccountInfoRequest() { StandardHeader = StandardHeader() };
                         res.Account.Value = _cfg.Account;
-                        res.OkCoinAccReqID.Value = Guid.NewGuid().ToString();
+                        res.AccReqID.Value = Guid.NewGuid().ToString();
                         return res;
                     }
                 case Extensions.Huobi:
@@ -280,6 +282,10 @@ namespace iFix.Crust.Fix44
             // 1      | 1    | 1.0
             // 1.2    | 1.2  | 1.2
             // 1.23   | 1.23 | 1.23
+            //
+            // You can test it even with order sizes that exceed current balance. Huobi performs the signature
+            // verification is performed before the balance check. If you get 58=10 in response (unsufficient
+            // funds), it means the signature has been accepted.
             string res = num.ToString();
             int period = res.IndexOf('.');
             if (period == -1) return res + ".0";

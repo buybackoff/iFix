@@ -132,6 +132,9 @@ namespace iFix.Mantle.Fix44
             if (msgType.Value == MarketDataIncrementalRefresh.MsgType.Value) return new MarketDataIncrementalRefresh();
             if (msgType.Value == OkCoinAccountInfoRequest.MsgType.Value) return new OkCoinAccountInfoRequest();
             if (msgType.Value == AccountInfoResponse.MsgType.Value) return new AccountInfoResponse();
+            // This never triggers because HuobiAccountInfoRequest.MsgType is the same as
+            // OkCoinAccountInfoRequest.MsgType. This doesn't matter though because NewMessage() is called
+            // only for the incoming server messages.
             if (msgType.Value == HuobiAccountInfoRequest.MsgType.Value) return new HuobiAccountInfoRequest();
             return null;
         }
@@ -666,14 +669,14 @@ namespace iFix.Mantle.Fix44
     {
         public static readonly MsgType MsgType = new MsgType { Value = "Z1000" };
         public Account Account = new Account();
-        public OkCoinAccReqID OkCoinAccReqID = new OkCoinAccReqID();
+        public AccReqID AccReqID = new AccReqID();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
             yield return MsgType;
             yield return StandardHeader;
             yield return Account;
-            yield return OkCoinAccReqID;
+            yield return AccReqID;
         }
 
         public T Visit<T>(IClientMessageVisitor<T> visitor)
@@ -682,7 +685,7 @@ namespace iFix.Mantle.Fix44
         }
     }
 
-    // Account Info Response <Z1001>: OKCoin extension.
+    // Account Info Response <Z1001>: OKCoin and Huobi extension.
     public class AccountInfoResponse : Message, IServerMessage
     {
         public static readonly MsgType MsgType = new MsgType { Value = "Z1001" };

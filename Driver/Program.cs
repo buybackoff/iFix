@@ -26,6 +26,7 @@ using System.Threading.Tasks;
 
 namespace iFix.Driver
 {
+    /*
     // BTCC test.
     class Program
     {
@@ -58,7 +59,7 @@ namespace iFix.Driver
                 _log.Fatal(e, "Unexpected exception. Terminating.");
             }
         }
-    }
+    }*/
 
     /*
     // NASDAQ test.
@@ -91,7 +92,6 @@ namespace iFix.Driver
         }
     }*/
 
-    /*
     // Huobi test.
     class Program
     {
@@ -106,12 +106,12 @@ namespace iFix.Driver
                 string secretKey = "FIXME";
                 var ssl = new SslOptions()
                 {
-                    CertificateName = "huobi",
-                    CertificateFilename = "FIXME",
-                    CertificateFilePassword = "FIXME",
                     AllowExpiredCertificate = true,
                     AllowPartialChain = true,
+                    AllowAllErrors = true,
                 };
+                // "trade" or "market".
+                string api = "trade";
                 var client = new Crust.Fix44.Client(
                     new Crust.Fix44.ClientConfig()
                     {
@@ -122,10 +122,30 @@ namespace iFix.Driver
                         Account = accessKey,
                         HeartBtInt = 30,
                         ReplaceEnabled = false,
-                        MarketDataSymbols = new List<string> { "btccny" }
+                        // Huobi supports two symbols: btc and ltc.
+                        // You can spell them as btccny and btc/cny if you want.
+                        // It's the same when sending order requests.
+                        MarketDataSymbols = api == "trade" ? null : new List<string> { "btc" },
+                        Extensions = Crust.Fix44.Extensions.Huobi,
                     },
-                    new TcpConnector("fix.huobi.com", 5000, ssl));
+                    // One end-point for market data, another for trading.
+                    new TcpConnector("106.38.234.75", api == "trade" ? 5001 : 5000, ssl));
                 client.OnOrderEvent += e => _log.Info("Generated event: {0}", e);
+                client.Connect().Wait();
+                if (api == "trade")
+                {
+                    Thread.Sleep(3000);
+                    var req = new NewOrderRequest()
+                    {
+                        Symbol = "btc",
+                        Side = Side.Sell,
+                        Quantity = 0.001m,
+                        OrderType = OrderType.Limit,
+                        Price = 6900.00m,
+                    };
+                    IOrderCtrl order = client.CreateOrder(req).Result;
+                    if (order == null) throw new Exception("Null order");
+                }
                 while (true) Thread.Sleep(2000);
                 client.Dispose();
             }
@@ -134,7 +154,7 @@ namespace iFix.Driver
                 _log.Fatal(e, "Unexpected exception. Terminating.");
             }
         }
-    }*/
+    }
 
     // OKcoin test.
     /*
