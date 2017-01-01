@@ -129,14 +129,8 @@ namespace iFix.Crust.Fix44
             if (_cfg.Extensions == Extensions.Huobi)
             {
                 res.MinQty.Value = request.Quantity;
-                string coinType = null;
-                if (request.Symbol.StartsWith("btc")) coinType = "1";
-                else if (request.Symbol.StartsWith("ltc")) coinType = "2";
-                else throw new ArgumentException(String.Format("Huobi doesn't support Symbol '{0}'", request.Symbol));
-
                 string method = request.Side == Side.Buy ? "buy" : "sell";
                 string price = null;
-
                 if (request.OrderType == OrderType.Market)
                 {
                     method += "_market";
@@ -146,14 +140,13 @@ namespace iFix.Crust.Fix44
                     if (!request.Price.HasValue) throw new ArgumentException("Limit order is missing Price");
                     price = ToHuobiString(request.Price.Value);
                 }
-
                 res.HuobiSignature = HuobiSignature
                 (
                     new KeyValuePair<string, string>[]
                     {
                         new KeyValuePair<string, string>("method", method),
                         new KeyValuePair<string, string>("amount", ToHuobiString(request.Quantity)),
-                        new KeyValuePair<string, string>("coin_type", coinType),
+                        new KeyValuePair<string, string>("coin_type", HuobiCoinType(request.Symbol)),
                         new KeyValuePair<string, string>("price", price),
                     }
                 );
@@ -166,7 +159,7 @@ namespace iFix.Crust.Fix44
             var res = new Mantle.Fix44.OrderCancelRequest() { StandardHeader = StandardHeader() };
             res.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
             // This field is required. It's treated differently by different exchanges:
-            // - MOEX ignores this field (it it'll reject the request if the field isn't set).
+            // - MOEX ignores this field but it'll reject the request if the field isn't set.
             // - OKcoin uses this field to identify the order. Note that they want OrderID (!) there.
             res.OrigClOrdID.Value = orderID;
             // MOEX identifies the order based on this field. OKcoin ignores this field.
@@ -174,6 +167,18 @@ namespace iFix.Crust.Fix44
             res.Instrument.Symbol.Value = request.Symbol;
             res.Side.Value = request.Side == Side.Buy ? '1' : '2';
             res.TransactTime.Value = res.StandardHeader.SendingTime.Value;
+            if (_cfg.Extensions == Extensions.Huobi)
+            {
+                res.HuobiSignature = HuobiSignature
+                (
+                    new KeyValuePair<string, string>[]
+                    {
+                        new KeyValuePair<string, string>("method", "cancel_order"),
+                        new KeyValuePair<string, string>("coin_type", HuobiCoinType(request.Symbol)),
+                        new KeyValuePair<string, string>("id", orderID),
+                    }
+                );
+            }
             return res;
         }
 
@@ -292,6 +297,13 @@ namespace iFix.Crust.Fix44
             int len = res.Length;
             while (len > period + 2 && res[len - 1] == '0') --len;
             return res.Substring(0, len);
+        }
+
+        static string HuobiCoinType(string symbol)
+        {
+            if (symbol.StartsWith("btc")) return "1";
+            if (symbol.StartsWith("ltc")) return "2";
+            throw new ArgumentException(String.Format("Huobi doesn't support Symbol '{0}'", symbol));
         }
 
         static string Md5Hex(string s)
