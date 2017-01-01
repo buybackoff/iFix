@@ -239,10 +239,13 @@ namespace iFix.Crust.Fix44
                 session.Send(_messageBuilder.Logon());
                 if (!(session.Receive(cancel).Result is Mantle.Fix44.Logon))
                     throw new UnexpectedMessageReceived("Expected Logon");
-                foreach (string symbol in _cfg.MarketDataSymbols)
+                if (_cfg.MarketDataSymbols != null)
                 {
-                    session.Send(_messageBuilder.MarketDataRequest(symbol, MessageBuilder.MarketDataType.Order));
-                    session.Send(_messageBuilder.MarketDataRequest(symbol, MessageBuilder.MarketDataType.Trade));
+                    foreach (string symbol in _cfg.MarketDataSymbols)
+                    {
+                        session.Send(_messageBuilder.MarketDataRequest(symbol, MessageBuilder.MarketDataType.Order));
+                        session.Send(_messageBuilder.MarketDataRequest(symbol, MessageBuilder.MarketDataType.Trade));
+                    }
                 }
             }));
             _messagePump = new MessagePump(
