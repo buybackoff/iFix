@@ -114,6 +114,7 @@ namespace iFix.Mantle.Fix44
 
         static IMessage NewMessage(MsgType msgType)
         {
+            // TODO: remove messages that don't implement IServerMessage from this list.
             if (msgType.Value == Logon.MsgType.Value) return new Logon();
             if (msgType.Value == Logout.MsgType.Value) return new Logout();
             if (msgType.Value == TestRequest.MsgType.Value) return new TestRequest();
