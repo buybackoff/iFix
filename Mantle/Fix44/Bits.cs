@@ -408,6 +408,21 @@ namespace iFix.Mantle.Fix44
         protected override int Tag { get { return 585; } }
     }
 
+    public class HuobiProcessedPrice : DecimalField
+    {
+        protected override int Tag { get { return 1630; } }
+    }
+
+    public class HuobiProcessedAmount : DecimalField
+    {
+        protected override int Tag { get { return 1631; } }
+    }
+
+    public class Quantity : DecimalField
+    {
+        protected override int Tag { get { return 53; } }
+    }
+
     // Component blocks: http://www.onixs.biz/fix-dictionary/4.4/#ComponentBlocks.
 
     // BeginString, BodyLength and MsgType are intentionally missing.

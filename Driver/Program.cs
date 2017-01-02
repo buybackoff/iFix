@@ -127,6 +127,7 @@ namespace iFix.Driver
                         // It's the same when sending order requests.
                         MarketDataSymbols = api == "trade" ? null : new List<string> { "btc" },
                         Extensions = Crust.Fix44.Extensions.Huobi,
+                        SimulateFills = true,
                     },
                     // One end-point for market data, another for trading.
                     new TcpConnector("106.38.234.75", api == "trade" ? 5001 : 5000, ssl));
@@ -134,17 +135,27 @@ namespace iFix.Driver
                 client.Connect().Wait();
                 if (api == "trade")
                 {
-                    Thread.Sleep(3000);
+                    Thread.Sleep(5000);
                     var req = new NewOrderRequest()
                     {
                         Symbol = "btc",
-                        Side = Side.Sell,
+                        Side = Side.Buy,
                         Quantity = 0.001m,
                         OrderType = OrderType.Limit,
-                        Price = 6900.00m,
+                        Price = 7400.00m,
                     };
+                    _log.Warn("Sending new order");
                     IOrderCtrl order = client.CreateOrder(req).Result;
                     if (order == null) throw new Exception("Null order");
+                    Thread.Sleep(3000);
+                    _log.Warn("Requesting status");
+                    order.RequestStatus().Wait();
+                    Thread.Sleep(3000);
+                    _log.Warn("Cancelling");
+                    order.Cancel().Wait();
+                    Thread.Sleep(3000);
+                    _log.Warn("Requesting status");
+                    order.RequestStatus().Wait();
                 }
                 while (true) Thread.Sleep(2000);
                 client.Dispose();

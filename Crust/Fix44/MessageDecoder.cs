@@ -283,14 +283,26 @@ namespace iFix.Crust.Fix44
                     _log.Warn("Unknown OrdStatus '{0}' in message {1}", msg.OrdStatus.Value, msg);
                     break;
             }
+            if (_extensions == Extensions.Huobi &&
+                res.Order.Has &&
+                res.Order.Value.Status.GetValueOrDefault(OrderStatus.Accepted) == OrderStatus.Finished)
+            {
+                // We don't allow orders to be finished just like that on Huobi because then we wouldn't
+                // get any fills. Instead, we finish orders only when receiving HuobiOrderInfoResponse.
+                res.Order.Value.Status = OrderStatus.TearingDown;
+            }
             if (msg.Price.HasValue && msg.Price.Value > 0)
                 res.Order.Value.Price = msg.Price.Value;
-            // If OrdStatus is TearingDown, LeavesQty is set to 0 even though the order is still active.
-            // We'd rather leave the last value.
-            if (msg.LeavesQty.HasValue && msg.OrdStatus.Value != '6')
-                res.Order.Value.LeftQuantity = msg.LeavesQty.Value;
-            if (msg.CumQty.HasValue)
-                res.Order.Value.FillQuantity = msg.CumQty.Value;
+            // These fields are always set to zero on Huobi. We'd rather leave the last values.
+            if (_extensions != Extensions.Huobi)
+            {
+                // If OrdStatus is TearingDown, LeavesQty is set to 0 even though the order is still active.
+                // We'd rather leave the last value.
+                if (msg.LeavesQty.HasValue && msg.OrdStatus.Value != '6')
+                    res.Order.Value.LeftQuantity = msg.LeavesQty.Value;
+                if (msg.CumQty.HasValue)
+                    res.Order.Value.FillQuantity = msg.CumQty.Value;
+            }
             if (msg.AvgPx.HasValue)
                 res.Order.Value.AverageFillPrice = msg.AvgPx.Value;
             if (msg.Symbol.HasValue)
@@ -305,6 +317,71 @@ namespace iFix.Crust.Fix44
                 res.Fill.Value.Quantity = msg.LastQty.Value;
             if (msg.LastPx.HasValue && msg.LastPx.Value > 0)
                 res.Fill.Value.Price = msg.LastPx.Value;
+            return res;
+        }
+
+        public IncomingMessage Visit(Mantle.Fix44.HuobiOrderInfoResponse msg)
+        {
+            var res = new IncomingMessage();
+            res.SendingTime = msg.StandardHeader.SendingTime.Value;
+            if (!msg.OrderID.HasValue)
+            {
+                _log.Warn("Missing OrderID: {0}", msg);
+                return null;
+            }
+            res.Order.Value.OrderID = msg.OrderID.Value;
+            if (!msg.OrdStatus.HasValue)
+            {
+                _log.Warn("Missing OrdStatus: {0}", msg);
+                return null;
+            }
+            switch (msg.OrdStatus.Value)
+            {
+                // New.
+                case '0': res.Order.Value.Status = OrderStatus.Accepted; break;
+                // Partially filled.
+                case '1': res.Order.Value.Status = OrderStatus.PartiallyFilled; break;
+                // Filled.
+                case '2': res.Order.Value.Status = OrderStatus.Finished; break;
+                // Done for day.
+                case '3': res.Order.Value.Status = OrderStatus.Finished; break;
+                // Cancelled.
+                case '4': res.Order.Value.Status = OrderStatus.Finished; break;
+                // Pending cancel.
+                case '6': res.Order.Value.Status = OrderStatus.TearingDown; break;
+                // Rejected.
+                case '8': res.Order.Value.Status = OrderStatus.Finished; break;
+                // Suspended.
+                case '9': res.Order.Value.Status = OrderStatus.Finished; break;
+                // Pending replace.
+                case 'E': res.Order.Value.Status = OrderStatus.Accepted; break;
+                default:
+                    _log.Warn("Unknown OrdStatus '{0}' in message {1}", msg.OrdStatus.Value, msg);
+                    break;
+            }
+            if (!msg.HuobiProcessedAmount.HasValue)
+            {
+                _log.Warn("Missing HuobiProcessedAmount: {0}", msg);
+                return null;
+            }
+            res.Order.Value.FillQuantity = msg.HuobiProcessedAmount.Value;
+            if (!msg.HuobiProcessedPrice.HasValue)
+            {
+                _log.Warn("Missing HuobiProcessedPrice: {0}", msg);
+                return null;
+            }
+            res.Order.Value.AverageFillPrice = msg.HuobiProcessedPrice.Value;
+            if (!msg.Quantity.HasValue)
+            {
+                _log.Warn("Missing Quantity: {0}", msg);
+                return null;
+            }
+            if (msg.Quantity.Value < msg.HuobiProcessedAmount.Value)
+            {
+                _log.Warn("Fill bigger than order size: {0}", msg);
+                return null;
+            }
+            res.Order.Value.LeftQuantity = msg.Quantity.Value - msg.HuobiProcessedAmount.Value;
             return res;
         }
 

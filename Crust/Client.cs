@@ -177,6 +177,13 @@ namespace iFix.Crust
         ///   else Cancel();
         /// </summary>
         Task<bool> ReplaceOrCancel(decimal quantity, decimal price);
+
+        /// <summary>
+        /// Attempts to request order status from the exchange. The result is true
+        /// if a request was sent to the exchange (but not necessarily processed
+        /// yet), false otherwise.
+        /// </summary>
+        Task<bool> RequestStatus();
     }
 
     /// <summary>

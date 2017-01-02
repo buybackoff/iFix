@@ -271,6 +271,28 @@ namespace iFix.Crust.Fix44
             return res;
         }
 
+        public Mantle.Fix44.IClientMessage OrderStatusRequest(NewOrderRequest req, string orderID)
+        {
+            var res = new Mantle.Fix44.OrderStatusRequest() { StandardHeader = StandardHeader() };
+            res.Account.Value = _cfg.Account;
+            res.ClOrdID.Value = orderID;  // that's what Huobi requires
+            res.Instrument.Symbol.Value = req.Symbol;
+            res.Side.Value = req.Side == Side.Buy ? '1' : '2';
+            if (_cfg.Extensions == Extensions.Huobi)
+            {
+                res.HuobiSignature = HuobiSignature
+                (
+                    new KeyValuePair<string, string>[]
+                    {
+                        new KeyValuePair<string, string>("method", "order_info"),
+                        new KeyValuePair<string, string>("id", orderID),
+                        new KeyValuePair<string, string>("coin_type", HuobiCoinType(req.Symbol)),
+                    }
+                );
+            }
+            return res;
+        }
+
         Mantle.Fix44.StandardHeader StandardHeader()
         {
             var res = new Mantle.Fix44.StandardHeader();

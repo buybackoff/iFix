@@ -87,6 +87,7 @@ namespace iFix.Mantle.Fix44
         T Visit(MarketDataResponse msg);
         T Visit(MarketDataIncrementalRefresh msg);
         T Visit(AccountInfoResponse msg);
+        T Visit(HuobiOrderInfoResponse msg);
     }
 
     // Factory and parser for FIX 4.4 client and server messages.
@@ -138,6 +139,7 @@ namespace iFix.Mantle.Fix44
             // only for the incoming server messages.
             if (msgType.Value == HuobiAccountInfoRequest.MsgType.Value) return new HuobiAccountInfoRequest();
             if (msgType.Value == OrderMassStatusRequest.MsgType.Value) return new OrderMassStatusRequest();
+            if (msgType.Value == HuobiOrderInfoResponse.MsgType.Value) return new HuobiOrderInfoResponse();
             return null;
         }
 
@@ -580,6 +582,10 @@ namespace iFix.Mantle.Fix44
         public static readonly MsgType MsgType = new MsgType { Value = "H" };
         public ClOrdID ClOrdID = new ClOrdID();
         public OrderID OrderID = new OrderID();
+        public Account Account = new Account();
+        public Instrument Instrument = new Instrument();
+        public Side Side = new Side();
+        public HuobiSignature HuobiSignature = new HuobiSignature();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
@@ -587,6 +593,10 @@ namespace iFix.Mantle.Fix44
             yield return StandardHeader;
             yield return ClOrdID;
             yield return OrderID;
+            yield return Account;
+            yield return Instrument;
+            yield return Side;
+            yield return HuobiSignature;
         }
 
         public T Visit<T>(IClientMessageVisitor<T> visitor)
@@ -779,6 +789,34 @@ namespace iFix.Mantle.Fix44
         }
 
         public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Huobi Order Info Response <Z1003>: https://github.com/huobiapi/API_Docs_en/wiki/FIX-v2-Trading%20Interface
+    public class HuobiOrderInfoResponse : Message, IServerMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "Z1003" };
+        public OrderID OrderID = new OrderID();
+        public OrdStatus OrdStatus = new OrdStatus();
+        public Quantity Quantity = new Quantity();
+        public HuobiProcessedPrice HuobiProcessedPrice = new HuobiProcessedPrice();
+        public HuobiProcessedAmount HuobiProcessedAmount = new HuobiProcessedAmount();
+        // There are more fields in this message. Check out the docs.
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return OrderID;
+            yield return OrdStatus;
+            yield return Quantity;
+            yield return HuobiProcessedPrice;
+            yield return HuobiProcessedAmount;
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
         {
             return visitor.Visit(this);
         }

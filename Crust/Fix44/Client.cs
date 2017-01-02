@@ -485,6 +485,41 @@ namespace iFix.Crust.Fix44
             }
         }
 
+        bool RequestStatus(IOrder order, NewOrderRequest request)
+        {
+            try
+            {
+                if (_cfg.Extensions != Extensions.Huobi)
+                {
+                    _log.Info("RequestStatus() is supported only if Huobi extensions are enabled");
+                    return false;
+                }
+                if (order.IsPending)
+                {
+                    _log.Info("Can't request status for an order with a pending request", order);
+                    return false;
+                }
+                // This is just to avoid sending useless requests.
+                // Huobi is fine with returning status of finished requests.
+                // OrderStatus.Finished means we've already received HuobiOrderInfoResponse with
+                // a terminal status.
+                if (order.Status == OrderStatus.Finished)
+                {
+                    _log.Info("Order already finished. Won't request its status: {0}", order);
+                    return false;
+                }
+                Assert.NotNull(order.OrderID);
+                Mantle.Fix44.IClientMessage msg = _messageBuilder.OrderStatusRequest(request, order.OrderID);
+                return _connection.Send(msg) != null;
+            }
+            catch (Exception e)
+            {
+                if (!_disposed)
+                    _log.Error(e, "Unexpected error while requesting order status");
+                return false;
+            }
+        }
+
         class OrderCtrl : IOrderCtrl
         {
             readonly ConnectedClient _client;
@@ -515,6 +550,13 @@ namespace iFix.Crust.Fix44
             public Task<bool> ReplaceOrCancel(decimal quantity, decimal price)
             {
                 var res = new Task<bool>(() => _client.Replace(_order, _request, quantity, price, OnReplaceReject.Cancel));
+                _client._scheduler.Schedule(() => res.RunSynchronously());
+                return res;
+            }
+
+            public Task<bool> RequestStatus()
+            {
+                var res = new Task<bool>(() => _client.RequestStatus(_order, _request));
                 _client._scheduler.Schedule(() => res.RunSynchronously());
                 return res;
             }
