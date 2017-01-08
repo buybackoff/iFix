@@ -44,7 +44,6 @@ namespace iFix.Driver
                     {
                         SenderCompID = apiKey,
                         TargetCompID = "BTCC-FIX-SERVER",
-                        HeartBtInt = 30,
                         ReplaceEnabled = false,
                         MarketDataSymbols = new List<string> { "BTCCNY" }
                     },
@@ -78,7 +77,6 @@ namespace iFix.Driver
                         Password = "$password",
                         SenderCompID = "$username",
                         TargetCompID = "ITINMD",
-                        HeartBtInt = 1,
                     },
                     new TcpConnector("154.61.34.2", 18423));
                 client.Connect();
@@ -120,7 +118,6 @@ namespace iFix.Driver
                         SenderCompID = "market",
                         TargetCompID = "server",
                         Account = accessKey,
-                        HeartBtInt = 30,
                         ReplaceEnabled = false,
                         // Huobi supports two symbols: btc and ltc.
                         // You can spell them as btccny and btc/cny if you want.
@@ -189,7 +186,6 @@ namespace iFix.Driver
                         SenderCompID = Guid.NewGuid().ToString(),
                         TargetCompID = "OKSERVER",
                         Account = String.Format("{0},{1}", apiKey, secretKey),
-                        HeartBtInt = 30,
                         ReplaceEnabled = false,
                         // MarketDataSymbols = new List<string> { "BTC/USD" }
                     },
@@ -291,7 +287,6 @@ namespace iFix.Driver
                 var client = new Crust.Fix44.Client(
                     new Crust.Fix44.ClientConfig()
                     {
-                        HeartBtInt = 30,
                         Password = "7118",
                         SenderCompID = "MD9019500002",
                         TargetCompID = "MFIXTradeIDCurr",
@@ -358,7 +353,7 @@ namespace iFix.Driver
                 var connection = tcpConnector.CreateConnection(CancellationToken.None).Result;
                 var logon = new Mantle.Fix44.Logon() { StandardHeader = MakeHeader() };
                 logon.EncryptMethod.Value = 0;
-                logon.HeartBtInt.Value = 30;
+                logon.HeartBtInt.Value = 5;
                 logon.Password.Value = "7118";
                 logon.ResetSeqNumFlag.Value = true;
                 Console.WriteLine("Sending logon");

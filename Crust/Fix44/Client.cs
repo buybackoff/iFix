@@ -29,9 +29,9 @@ namespace iFix.Crust.Fix44
     public class ClientConfig
     {
         /// <summary>
-        /// Logon field. Recommended value: 30.
+        /// Logon field. Recommended value: 5.
         /// </summary>
-        public int HeartBtInt = 30;
+        public int HeartBtInt = 5;
         /// <summary>
         /// Logon field. Can be null.
         /// </summary>
