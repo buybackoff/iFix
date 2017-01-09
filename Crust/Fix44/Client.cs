@@ -31,7 +31,7 @@ namespace iFix.Crust.Fix44
         /// <summary>
         /// Logon field. Recommended value: 5.
         /// </summary>
-        public int HeartBtInt = 5;
+        public int HeartBtInt = 30;
         /// <summary>
         /// Logon field. Can be null.
         /// </summary>

@@ -30,7 +30,7 @@ namespace iFix.Crust
 
     class TcpConnection : IConnection
     {
-        private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(60);
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
 
         readonly TcpClient _client;
