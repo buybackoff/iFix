@@ -651,15 +651,24 @@ namespace iFix.Crust
         Task Connect();
 
         /// <summary>
-        /// Transition to the "dicsonnected" state, in which the client SHALL NOT have a live
+        /// Transition to the "disconnected" state, in which the client SHALL NOT have a live
         /// connection to the exchange and SHALL NOT raise order events.
         /// 
         /// This method has no preconditions. It's OK to call it any time from any thread.
         /// 
-        /// NOTE: Dispose() is equivalent to Disconnect().Wait(). It OK to use Disconnect() as an
+        /// NOTE: Dispose() is equivalent to Disconnect().Wait(). It's OK to use Disconnect() as an
         /// asynchronous Dispose().
+        /// 
+        /// WARNING: Any unfinished orders you might have had before calling Disconnect() won't
+        /// finish, ever!
         /// </summary>
         Task Disconnect();
+
+        /// <summary>
+        /// If called while disconnected, equivalent to Connect(). Otherwise closes and reopens
+        /// the connection to the exchange. Unlike Disconnect(), doesn't fuck up unfinished orders.
+        /// </summary>
+        Task Reconnect();
 
         /// <summary>
         /// Requests a snapshot of market data from the exchange. The snapshot will be delivered

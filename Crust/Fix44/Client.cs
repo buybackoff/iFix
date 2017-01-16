@@ -257,6 +257,11 @@ namespace iFix.Crust.Fix44
 
         public event Action<OrderEvent> OnOrderEvent;
 
+        public void Reconnect()
+        {
+            _scheduler.Schedule(_connection.Reconnect);
+        }
+
         public Task<IOrderCtrl> CreateOrder(NewOrderRequest request)
         {
             request = (NewOrderRequest)request.Clone();
@@ -641,6 +646,27 @@ namespace iFix.Crust.Fix44
             });
         }
 
+        public Task Reconnect()
+        {
+            _log.Info("Reconnect requested by the user");
+            return Transition(() =>
+            {
+                if (_client == null)
+                {
+                    _client = new ConnectedClient(_cfg, _connector);
+                    _client.OnOrderEvent += (OrderEvent e) =>
+                    {
+                        Action<OrderEvent> action = Volatile.Read(ref OnOrderEvent);
+                        if (action != null) action(e);
+                    };
+                }
+                else
+                {
+                    _client.Reconnect();
+                }
+            });
+        }
+
         public Task<bool> RequestMarketData(string symbol)
         {
             lock (_monitor)
@@ -674,7 +700,7 @@ namespace iFix.Crust.Fix44
             var box = new Box<Task>();
             box.Value = new Task(() =>
             {
-                // It's OK to run it without holding a lock. There is at most transition running
+                // It's OK to run it without holding a lock. There is at most one transition running
                 // at a time, so writes don't race with each other. They also don't race with
                 // reads because CreateOrder() fails fast if _transition is not null.
                 transition();
