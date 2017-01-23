@@ -569,6 +569,25 @@ namespace iFix.Crust.Fix44
             return null;
         }
 
+        public IncomingMessage Visit(Mantle.Fix44.BtccAccountInfoResponse msg)
+        {
+            var res = new IncomingMessage();
+            res.SendingTime = msg.StandardHeader.SendingTime.Value;
+            res.AccountInfo.Value.Assets = new Dictionary<string, Asset>();
+            foreach (Mantle.Fix44.BtccBalance balance in msg.BtccBalances)
+            {
+                if (balance.Currency.HasValue && balance.BtccAmount.HasValue)
+                {
+                    res.AccountInfo.Value.Assets.Add
+                    (
+                        balance.Currency.Value,
+                        new Asset() { Available = balance.BtccAmount.Value }
+                    );
+                }
+            }
+            return res;
+        }
+
         // Three possible outcomes:
         // - Result is not null. That's success. In this case error is guaranteed to be null.
         // - Result is null, error is null. It means the entry isn't a trade. Not an error.

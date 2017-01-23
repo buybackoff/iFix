@@ -306,6 +306,8 @@ namespace iFix.Mantle.Fix44
     // OKCoin uses an odd version of this in Account Info Response.
     //   - okcoin.com gives "USD/BTC/LTC".
     //   - okcoin.cn gives "CNY/BTC/LTC".
+    //
+    // BTCC uses "BTC", "LTC" and "CNY".
     public class Currency : StringField
     {
         protected override int Tag { get { return 15; } }
@@ -396,6 +398,18 @@ namespace iFix.Mantle.Fix44
     public class HuobiSign : StringField
     {
         protected override int Tag { get { return 959; } }
+    }
+
+    // BTCC extension: Client-assigned unique ID of this request.
+    public class BtccAccReqID : StringField
+    {
+        protected override int Tag { get { return 8000; } }
+    }
+
+    // BTCC extension.
+    public class BtccAmount : DecimalField
+    {
+        protected override int Tag { get { return 8001; } }
     }
 
     public class MassStatusReqID : StringField
@@ -512,6 +526,18 @@ namespace iFix.Mantle.Fix44
         }
     }
 
+    public class BtccBalance : FieldSet
+    {
+        public Currency Currency = new Currency();
+        public BtccAmount BtccAmount = new BtccAmount();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return Currency;
+            yield return BtccAmount;
+        }
+    }
+
     // Groups: http://fixwiki.org/fixwiki/FPL:Tag_Value_Syntax#Repeating_Groups.
 
     public class TradingSessionIDGroup : FieldGroup<TradingSessionID>
@@ -537,5 +563,10 @@ namespace iFix.Mantle.Fix44
     public class MDEntries : FieldGroup<MDEntry>
     {
         protected override int GroupSizeTag { get { return 268; } }
+    }
+
+    public class BtccBalances : FieldGroup<BtccBalance>
+    {
+        protected override int GroupSizeTag { get { return 9000; } }
     }
 }

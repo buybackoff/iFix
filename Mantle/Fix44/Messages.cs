@@ -68,6 +68,7 @@ namespace iFix.Mantle.Fix44
         T Visit(OkCoinAccountInfoRequest msg);
         T Visit(HuobiAccountInfoRequest msg);
         T Visit(OrderMassStatusRequest msg);
+        T Visit(BtccAccountInfoRequest msg);
     }
 
     // FIX client can use this interface to handle all types of messages
@@ -88,6 +89,7 @@ namespace iFix.Mantle.Fix44
         T Visit(MarketDataIncrementalRefresh msg);
         T Visit(AccountInfoResponse msg);
         T Visit(HuobiOrderInfoResponse msg);
+        T Visit(BtccAccountInfoResponse msg);
     }
 
     // Factory and parser for FIX 4.4 client and server messages.
@@ -115,6 +117,7 @@ namespace iFix.Mantle.Fix44
         static IMessage NewMessage(MsgType msgType)
         {
             // TODO: remove messages that don't implement IServerMessage from this list.
+            // Currently they are commented out.
             if (msgType.Value == Logon.MsgType.Value) return new Logon();
             if (msgType.Value == Logout.MsgType.Value) return new Logout();
             if (msgType.Value == TestRequest.MsgType.Value) return new TestRequest();
@@ -122,25 +125,27 @@ namespace iFix.Mantle.Fix44
             if (msgType.Value == Reject.MsgType.Value) return new Reject();
             if (msgType.Value == SequenceReset.MsgType.Value) return new SequenceReset();
             if (msgType.Value == ResendRequest.MsgType.Value) return new ResendRequest();
-            if (msgType.Value == NewOrderSingle.MsgType.Value) return new NewOrderSingle();
-            if (msgType.Value == OrderCancelRequest.MsgType.Value) return new OrderCancelRequest();
-            if (msgType.Value == OrderCancelReplaceRequest.MsgType.Value) return new OrderCancelReplaceRequest();
+            // if (msgType.Value == NewOrderSingle.MsgType.Value) return new NewOrderSingle();
+            // if (msgType.Value == OrderCancelRequest.MsgType.Value) return new OrderCancelRequest();
+            // if (msgType.Value == OrderCancelReplaceRequest.MsgType.Value) return new OrderCancelReplaceRequest();
             if (msgType.Value == ExecutionReport.MsgType.Value) return new ExecutionReport();
             if (msgType.Value == OrderCancelReject.MsgType.Value) return new OrderCancelReject();
-            if (msgType.Value == OrderMassCancelRequest.MsgType.Value) return new OrderMassCancelRequest();
+            // if (msgType.Value == OrderMassCancelRequest.MsgType.Value) return new OrderMassCancelRequest();
             if (msgType.Value == OrderMassCancelReport.MsgType.Value) return new OrderMassCancelReport();
-            if (msgType.Value == OrderStatusRequest.MsgType.Value) return new OrderStatusRequest();
-            if (msgType.Value == MarketDataRequest.MsgType.Value) return new MarketDataRequest();
+            // if (msgType.Value == OrderStatusRequest.MsgType.Value) return new OrderStatusRequest();
+            // if (msgType.Value == MarketDataRequest.MsgType.Value) return new MarketDataRequest();
             if (msgType.Value == MarketDataResponse.MsgType.Value) return new MarketDataResponse();
             if (msgType.Value == MarketDataIncrementalRefresh.MsgType.Value) return new MarketDataIncrementalRefresh();
-            if (msgType.Value == OkCoinAccountInfoRequest.MsgType.Value) return new OkCoinAccountInfoRequest();
+            // if (msgType.Value == OkCoinAccountInfoRequest.MsgType.Value) return new OkCoinAccountInfoRequest();
             if (msgType.Value == AccountInfoResponse.MsgType.Value) return new AccountInfoResponse();
             // This never triggers because HuobiAccountInfoRequest.MsgType is the same as
             // OkCoinAccountInfoRequest.MsgType. This doesn't matter though because NewMessage() is called
             // only for the incoming server messages.
-            if (msgType.Value == HuobiAccountInfoRequest.MsgType.Value) return new HuobiAccountInfoRequest();
-            if (msgType.Value == OrderMassStatusRequest.MsgType.Value) return new OrderMassStatusRequest();
+            // if (msgType.Value == HuobiAccountInfoRequest.MsgType.Value) return new HuobiAccountInfoRequest();
+            // if (msgType.Value == OrderMassStatusRequest.MsgType.Value) return new OrderMassStatusRequest();
             if (msgType.Value == HuobiOrderInfoResponse.MsgType.Value) return new HuobiOrderInfoResponse();
+            // if (msgType.Value == BtccAccountInfoRequest.MsgType.Value) return new BtccAccountInfoRequest();
+            if (msgType.Value == BtccAccountInfoResponse.MsgType.Value) return new BtccAccountInfoResponse();
             return null;
         }
 
@@ -777,6 +782,7 @@ namespace iFix.Mantle.Fix44
         public MassStatusReqID MassStatusReqID = new MassStatusReqID();
         public MassStatusReqType MassStatusReqType = new MassStatusReqType();
         public Instrument Instrument = new Instrument();
+        public Side Side = new Side();
 
         public override IEnumerator<IFields> GetEnumerator()
         {
@@ -787,6 +793,7 @@ namespace iFix.Mantle.Fix44
             yield return MassStatusReqID;
             yield return MassStatusReqType;
             yield return Instrument;
+            yield return Side;
         }
 
         public T Visit<T>(IClientMessageVisitor<T> visitor)
@@ -815,6 +822,46 @@ namespace iFix.Mantle.Fix44
             yield return Quantity;
             yield return HuobiProcessedPrice;
             yield return HuobiProcessedAmount;
+        }
+
+        public T Visit<T>(IServerMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Account Info Request <U1000>: BTCC extension.
+    public class BtccAccountInfoRequest : Message, IClientMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "U1000" };
+        public Account Account = new Account();
+        public BtccAccReqID BtccAccReqID = new BtccAccReqID();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return Account;
+            yield return BtccAccReqID;
+        }
+
+        public T Visit<T>(IClientMessageVisitor<T> visitor)
+        {
+            return visitor.Visit(this);
+        }
+    }
+
+    // Account Info Response <U1001>: BTCC extension.
+    public class BtccAccountInfoResponse : Message, IServerMessage
+    {
+        public static readonly MsgType MsgType = new MsgType { Value = "U1001" };
+        public BtccBalances BtccBalances = new BtccBalances();
+
+        public override IEnumerator<IFields> GetEnumerator()
+        {
+            yield return MsgType;
+            yield return StandardHeader;
+            yield return BtccBalances;
         }
 
         public T Visit<T>(IServerMessageVisitor<T> visitor)

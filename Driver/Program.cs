@@ -26,7 +26,6 @@ using System.Threading.Tasks;
 
 namespace iFix.Driver
 {
-    /*
     // BTCC test.
     class Program
     {
@@ -36,21 +35,48 @@ namespace iFix.Driver
         {
             try
             {
-                // Anyone who knows your keys can send orders on your behalf. Don't leak them!
-                string apiKey = "FIXME";
-                var ssl = new SslOptions() { AllowPartialChain = true, AllowAllErrors = true };
+                string accessKey = "FIXME";
+                string secretKey = "FIXME";
+                var ssl = new SslOptions()
+                {
+                    AllowExpiredCertificate = true,
+                    AllowPartialChain = true,
+                    AllowAllErrors = true,
+                };
                 var client = new Crust.Fix44.Client(
                     new Crust.Fix44.ClientConfig()
                     {
-                        SenderCompID = apiKey,
+                        SenderCompID = accessKey,
                         TargetCompID = "BTCC-FIX-SERVER",
+                        Account = accessKey,
                         ReplaceEnabled = false,
-                        MarketDataSymbols = new List<string> { "BTCCNY" }
+                        Extensions = Crust.Fix44.Extensions.Btcc,
+                        SimulateFills = true,
+                        SecretKey = secretKey,
                     },
-                    new TcpConnector("fix.btcc.com", 9880, ssl));
+                    // Alternative host name: fix.btcc.com. These are different servers.
+                    // Both run on ap-northeast-1.compute.amazonaws.com, Asia Pacific (Tokyo).
+                    new TcpConnector("fix.btcchina.com", 9880, ssl));
                 client.OnOrderEvent += e => _log.Info("Generated event: {0}", e);
                 client.Connect().Wait();
-                while (true) Thread.Sleep(2000);
+                Thread.Sleep(10000);
+                var req = new NewOrderRequest()
+                {
+                    Symbol = "BTCCNY",
+                    Side = Side.Sell,
+                    Quantity = 0.01m,
+                    OrderType = OrderType.Limit,
+                    Price = 10000m,
+                };
+                _log.Warn("Sending new order");
+                IOrderCtrl order = client.CreateOrder(req).Result;
+                if (order == null) throw new Exception("Null order");
+                while (true)
+                {
+                    Thread.Sleep(5000);
+                    client.RequestMassOrderStatus("BTCCNY").Wait();
+                    client.RequestAccountInfo().Wait();
+                }
                 client.Dispose();
             }
             catch (Exception e)
@@ -58,7 +84,7 @@ namespace iFix.Driver
                 _log.Fatal(e, "Unexpected exception. Terminating.");
             }
         }
-    }*/
+    }
 
     /*
     // NASDAQ test.
@@ -91,6 +117,7 @@ namespace iFix.Driver
     }*/
 
     // Huobi test.
+    /*
     class Program
     {
         private static readonly Logger _log = LogManager.GetCurrentClassLogger();
@@ -161,7 +188,7 @@ namespace iFix.Driver
                 _log.Fatal(e, "Unexpected exception. Terminating.");
             }
         }
-    }
+    }*/
 
     // OKcoin test.
     /*

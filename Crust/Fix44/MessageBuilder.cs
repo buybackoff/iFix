@@ -95,11 +95,11 @@ namespace iFix.Crust.Fix44
             var res = new Mantle.Fix44.Heartbeat() { StandardHeader = StandardHeader() };
             res.TestReqID.Value = testReqID;
             if (_cfg.Username != null) res.Username.Value = _cfg.Username;
-            res.Password.Value = _cfg.Password;
+            if (_cfg.Password != null) res.Password.Value = _cfg.Password;
             return res;
         }
 
-        public Mantle.Fix44.NewOrderSingle NewOrderSingle(NewOrderRequest request)
+        public Mantle.Fix44.NewOrderSingle NewOrderSingle(NewOrderRequest req)
         {
             var res = new Mantle.Fix44.NewOrderSingle() { StandardHeader = StandardHeader() };
             res.ClOrdID.Value = _clOrdIDGenerator.GenerateID();
@@ -114,42 +114,55 @@ namespace iFix.Crust.Fix44
             }
             if (_cfg.TradingSessionID != null)
                 res.TradingSessionIDGroup.Add(new Mantle.Fix44.TradingSessionID { Value = _cfg.TradingSessionID });
-            res.Instrument.Symbol.Value = request.Symbol;
-            res.Side.Value = request.Side == Side.Buy ? '1' : '2';
+            res.Instrument.Symbol.Value = req.Symbol;
+            res.Side.Value = req.Side == Side.Buy ? '1' : '2';
             res.TransactTime.Value = res.StandardHeader.SendingTime.Value;
-            res.OrdType.Value = request.OrderType == OrderType.Market ? '1' : '2';
-            if (request.Price.HasValue)
-                res.Price.Value = request.Price.Value;
-            if (request.TimeToLive.HasValue)
+            res.OrdType.Value = req.OrderType == OrderType.Market ? '1' : '2';
+            if (req.Price.HasValue)
+                res.Price.Value = req.Price.Value;
+            if (req.TimeToLive.HasValue)
             {
                 res.TimeInForce.Value = '6';  // Good Till Date
-                res.ExpireTime.Value = DateTime.UtcNow + request.TimeToLive.Value;
+                res.ExpireTime.Value = DateTime.UtcNow + req.TimeToLive.Value;
             }
-            res.OrderQtyData.OrderQty.Value = request.Quantity;
+            res.OrderQtyData.OrderQty.Value = req.Quantity;
             if (_cfg.Extensions == Extensions.Huobi)
             {
-                res.MinQty.Value = request.Quantity;
-                string method = request.Side == Side.Buy ? "buy" : "sell";
+                res.MinQty.Value = req.Quantity;
+                string method = req.Side == Side.Buy ? "buy" : "sell";
                 string price = null;
-                if (request.OrderType == OrderType.Market)
+                if (req.OrderType == OrderType.Market)
                 {
                     method += "_market";
                 }
                 else
                 {
-                    if (!request.Price.HasValue) throw new ArgumentException("Limit order is missing Price");
-                    price = ToHuobiString(request.Price.Value);
+                    if (!req.Price.HasValue) throw new ArgumentException("Limit order is missing Price");
+                    price = ToHuobiString(req.Price.Value);
                 }
                 res.HuobiSignature = HuobiSignature
                 (
                     new KeyValuePair<string, string>[]
                     {
                         new KeyValuePair<string, string>("method", method),
-                        new KeyValuePair<string, string>("amount", ToHuobiString(request.Quantity)),
-                        new KeyValuePair<string, string>("coin_type", HuobiCoinType(request.Symbol)),
+                        new KeyValuePair<string, string>("amount", ToHuobiString(req.Quantity)),
+                        new KeyValuePair<string, string>("coin_type", HuobiCoinType(req.Symbol)),
                         new KeyValuePair<string, string>("price", price),
                     }
                 );
+            }
+            if (_cfg.Extensions == Extensions.Btcc)
+            {
+                string price = "";
+                if (req.OrderType == OrderType.Limit)
+                {
+                    if (!req.Price.HasValue) throw new ArgumentException("Limit order is missing Price");
+                    price = ToBtccString(req.Price.Value);
+                }
+                string method = req.Side == Side.Buy ? "buy" : "sell";
+                // This is undocumented.
+                method += $"Order3&params={price},{ToBtccString(req.Quantity)},{req.Symbol}";
+                res.Account.Value = BtccSignature(_cfg.Account, _cfg.SecretKey, method);
             }
             return res;
         }
@@ -239,6 +252,16 @@ namespace iFix.Crust.Fix44
                         res.HuobiAccReqID.Value = Guid.NewGuid().ToString();
                         return res;
                     }
+                case Extensions.Btcc:
+                    {
+                        var res = new Mantle.Fix44.BtccAccountInfoRequest()
+                        {
+                            StandardHeader = StandardHeader(),
+                        };
+                        res.Account.Value = BtccSignature(_cfg.Account, _cfg.SecretKey, "getAccountInfo&params=balance");
+                        res.BtccAccReqID.Value = Guid.NewGuid().ToString();
+                        return res;
+                    }
             }
             throw new UnsupportedOperationException(
                 "AccountInfoRequest requires FIX extensions. If your exchange supports this operation, " +
@@ -267,6 +290,19 @@ namespace iFix.Crust.Fix44
                         new KeyValuePair<string, string>("coin_type", HuobiCoinType(symbol)),
                     }
                 );
+            }
+            if (_cfg.Extensions == Extensions.Btcc)
+            {
+                // OrderMassStatusRequest is very broken on BTCC. 90% of the time they won't reply anything.
+                // When they do reply, instead of sending execution reports for all open orders, they send
+                // a single execution report for a random order, which usually but no always is an old cancelled
+                // order.
+                if (symbol == null)
+                    throw new Exception("Symbol is required when requesting order status on BTCC");
+                res.Side.Value = '1';  // required but meaningless
+                // Undocumented of course.
+                string method = $"getOrders&params=1,{symbol},1000,0,0,1";
+                res.Account.Value = BtccSignature(_cfg.Account, _cfg.SecretKey, method);
             }
             return res;
         }
@@ -314,12 +350,12 @@ namespace iFix.Crust.Fix44
             {
                 new KeyValuePair<string, string>("access_key", _cfg.Account),
                 new KeyValuePair<string, string>("created", now.ToString()),
-                new KeyValuePair<string, string>("secret_key", _cfg.Password),
+                new KeyValuePair<string, string>("secret_key", _cfg.SecretKey ?? _cfg.Password),
             });
             string s = String.Join("&", kv.Where(p => p.Value != null)
                                           .OrderBy(p => p.Key)
                                           .Select(p => String.Format("{0}={1}", p.Key, p.Value)));
-            res.HuobiSign.Value = Md5Hex(s);
+            res.HuobiSign.Value = Hex(MD5.Create().ComputeHash(Encoding.ASCII.GetBytes(s)));
             return res;
         }
 
@@ -354,15 +390,35 @@ namespace iFix.Crust.Fix44
             throw new ArgumentException(String.Format("Huobi doesn't support Symbol '{0}'", symbol));
         }
 
-        static string Md5Hex(string s)
+        static string Hex(byte[] bytes)
         {
-            byte[] hash = MD5.Create().ComputeHash(Encoding.ASCII.GetBytes(s));
-            StringBuilder res = new StringBuilder(2 * hash.Length);
-            foreach (byte x in hash)
+            StringBuilder res = new StringBuilder(2 * bytes.Length);
+            foreach (byte x in bytes)
             {
                 res.AppendFormat("{0:x2}", x);
             }
             return res.ToString();
+        }
+
+        static string BtccSignature(string accessKey, string secretKey, string method)
+        {
+            DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            long tonce = 1000 * (long)(DateTime.UtcNow - epoch).TotalMilliseconds;
+            string data = $"tonce={tonce}&accesskey={accessKey}&requestmethod=post&id=1&method={method}";
+            HMACSHA1 hmac = new HMACSHA1(Encoding.ASCII.GetBytes(secretKey));
+            string hash = Hex(hmac.ComputeHash(Encoding.ASCII.GetBytes(data)));
+            string sign = Convert.ToBase64String(Encoding.Default.GetBytes(accessKey + ":" + hash));
+            return $"{tonce}:Basic {sign}";
+        }
+
+        static string ToBtccString(decimal num)
+        {
+            string res = num.ToString();
+            if (res.IndexOf('.') == -1) return res;
+            int len = res.Length;
+            while (res[len - 1] == '0') --len;
+            if (res[len - 1] == '.') --len;
+            return res.Substring(0, len);
         }
     }
 }

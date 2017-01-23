@@ -413,6 +413,7 @@ namespace iFix.Crust
     public class Asset : ICloneable
     {
         public decimal Available = 0m;
+        // This field is always zero when dealing with BTCC.
         public decimal InUse = 0m;
 
         public object Clone()

@@ -24,6 +24,8 @@ namespace iFix.Crust.Fix44
         OkCoin,
         // huobi.com.
         Huobi,
+        // btcc.com.
+        Btcc,
     }
 
     public class ClientConfig
@@ -37,7 +39,7 @@ namespace iFix.Crust.Fix44
         /// </summary>
         public string Username;
         /// <summary>
-        /// Logon field. Can't be null.
+        /// Logon field. Can be null.
         /// </summary>
         public string Password;
 
@@ -124,6 +126,12 @@ namespace iFix.Crust.Fix44
         /// LastQty (32). In other words, it will infer fills from order state changes.
         /// </summary>
         public bool SimulateFills = false;
+
+        /// <summary>
+        /// Some exchanges require that outgoing messages be signed. SecretKey is used
+        /// to generate such signatures.
+        /// </summary>
+        public string SecretKey = null;
     }
 
     // What should be done with the order if an attempt to replace it is rejected?
