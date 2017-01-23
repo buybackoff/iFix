@@ -120,8 +120,7 @@ namespace iFix.Driver
                         Account = accessKey,
                         ReplaceEnabled = false,
                         // Huobi supports two symbols: btc and ltc.
-                        // You can spell them as btccny and btc/cny if you want.
-                        // It's the same when sending order requests.
+                        // In the incoming messages they may be called btccny and ltccny.
                         MarketDataSymbols = api == "trade" ? null : new List<string> { "btc" },
                         Extensions = Crust.Fix44.Extensions.Huobi,
                         SimulateFills = true,
